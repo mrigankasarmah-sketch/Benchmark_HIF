@@ -10,6 +10,9 @@
       --accent-color: #007acc;
       --text-color: #e0e0e0;
       --border-color: #33333d;
+      --gold-color: #ffd700;
+      --silver-color: #c0c0c0;
+      --bronze-color: #cd7f32;
     }
     body {
       margin: 0;
@@ -76,6 +79,52 @@
       margin-bottom: 15px;
       font-weight: 500;
     }
+
+    /* Podium Display */
+    .podium-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    .podium-card {
+      background-color: var(--card-bg);
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .podium-card.gold { border-top: 4px solid var(--gold-color); }
+    .podium-card.silver { border-top: 4px solid var(--silver-color); }
+    .podium-card.bronze { border-top: 4px solid var(--bronze-color); }
+
+    .podium-badge {
+      font-size: 0.8rem;
+      font-weight: bold;
+      padding: 4px 12px;
+      border-radius: 12px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .gold .podium-badge { background: rgba(255, 215, 0, 0.2); color: var(--gold-color); }
+    .silver .podium-badge { background: rgba(192, 192, 192, 0.2); color: var(--silver-color); }
+    .bronze .podium-badge { background: rgba(205, 127, 50, 0.2); color: var(--bronze-color); }
+
+    .podium-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .podium-score {
+      font-size: 0.85rem;
+      color: #aaa;
+    }
     
     /* Table Styling */
     .table-container {
@@ -103,6 +152,20 @@
     tr:hover {
       background-color: #25252e;
     }
+    .rank-badge {
+      font-weight: bold;
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      line-height: 24px;
+      text-align: center;
+      border-radius: 50%;
+      background: #333;
+      font-size: 0.8rem;
+    }
+    .rank-1 { background: var(--gold-color); color: #000; }
+    .rank-2 { background: var(--silver-color); color: #000; }
+    .rank-3 { background: var(--bronze-color); color: #000; }
 
     /* 3D Viewports Grid */
     .viewports-grid {
@@ -185,7 +248,47 @@
 
   <div id="status">Upload both Ground Truth and Noisy mesh files to begin.</div>
 
-  <h2>1. Metrics Comparison</h2>
+  <!-- SECTION: METHOD RANKINGS -->
+  <h2>1. Overall Method Rankings</h2>
+  <div class="podium-container" id="podium-container">
+    <div class="podium-card gold">
+      <div class="podium-badge">🥇 1st Place</div>
+      <div class="podium-title">-</div>
+      <div class="podium-score">Execute benchmark to reveal winner</div>
+    </div>
+    <div class="podium-card silver">
+      <div class="podium-badge">🥈 2nd Place</div>
+      <div class="podium-title">-</div>
+      <div class="podium-score">Execute benchmark to reveal runner-up</div>
+    </div>
+    <div class="podium-card bronze">
+      <div class="podium-badge">🥉 3rd Place</div>
+      <div class="podium-title">-</div>
+      <div class="podium-score">Execute benchmark to reveal 3rd place</div>
+    </div>
+  </div>
+
+  <div class="table-container">
+    <table id="rankings-table">
+      <thead>
+        <tr>
+          <th>Overall Rank</th>
+          <th>Method Name</th>
+          <th>Avg. Performance Rank ↓</th>
+          <th>RMSE Rank</th>
+          <th>Chamfer Rank</th>
+          <th>Hausdorff Rank</th>
+          <th>EMD Rank</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="7" style="text-align:center; color:#666;">No rankings evaluated yet.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SECTION: METRICS TABLE -->
+  <h2>2. Detailed Metrics Comparison</h2>
   <div class="table-container">
     <table id="metrics-table">
       <thead>
@@ -203,7 +306,8 @@
     </table>
   </div>
 
-  <h2>2. Interactive 3D Denoised Visualizations</h2>
+  <!-- SECTION: 3D VIEWPORTS -->
+  <h2>3. Interactive 3D Denoised Visualizations</h2>
   <div class="viewports-grid" id="viewports-grid"></div>
 
   <script>
@@ -219,6 +323,8 @@
     const runBtn = document.getElementById('run-btn');
     const statusDiv = document.getElementById('status');
     const metricsTableBody = document.querySelector('#metrics-table tbody');
+    const rankingsTableBody = document.querySelector('#rankings-table tbody');
+    const podiumContainer = document.getElementById('podium-container');
     const viewportsGrid = document.getElementById('viewports-grid');
 
     roundsSlider.addEventListener('input', (e) => roundsVal.textContent = e.target.value);
@@ -403,8 +509,6 @@
     // =========================================================================
     // THE 12 EXACT SMOOTHING & NORMAL FILTERING ALGORITHMS
     // =========================================================================
-
-    // 1. Laplacian
     function laplacianSmoothing(v, A, rounds, lambdaParam = 0.5) {
       let current = new Float32Array(v);
       for (let r = 0; r < rounds; r++) {
@@ -425,7 +529,6 @@
       return current;
     }
 
-    // 2. Taubin
     function taubinSmoothing(v, A, rounds, lambdaParam = 0.5, muParam = -0.53) {
       let current = new Float32Array(v);
       for (let r = 0; r < rounds; r++) {
@@ -458,7 +561,6 @@
       return current;
     }
 
-    // 3. Bilateral Mesh Denoising
     function bilateralMeshDenoising(v, indices, A, rounds, sigmaS = 1.0, sigmaR = 0.3) {
       let current = new Float32Array(v);
       for (let r = 0; r < rounds; r++) {
@@ -487,7 +589,6 @@
       return current;
     }
 
-    // 4. Mean Curvature Flow
     function meanCurvatureFlow(v, indices, A, rounds, stepSize = 0.085) {
       let current = new Float32Array(v);
       for (let r = 0; r < rounds; r++) {
@@ -509,7 +610,6 @@
       return current;
     }
 
-    // 5. Tangential Relaxation
     function tangentialRelaxation(v, indices, A, rounds, stepSize = 0.085) {
       let current = new Float32Array(v);
       for (let r = 0; r < rounds; r++) {
@@ -531,7 +631,6 @@
       return current;
     }
 
-    // 6. Anisotropic Flow
     function anisotropicFlow(v, indices, A, rounds, alpha = 0.85, beta = 0.15) {
       let current = new Float32Array(v);
       for (let r = 0; r < rounds; r++) {
@@ -554,7 +653,6 @@
       return current;
     }
 
-    // 7. Tangent Plane Smoothing
     function tangentPlaneSmoothing(v, A, rounds, stepSize = 0.085) {
       let current = new Float32Array(v);
       for (let r = 0; r < rounds; r++) {
@@ -573,7 +671,6 @@
       return current;
     }
 
-    // 8. HIF Flow (Proposed)
     function hifFlow(v, indices, A, rounds, alpha = 0.85, beta = 0.15) {
       let current = new Float32Array(v);
       for (let r = 0; r < rounds; r++) {
@@ -596,7 +693,6 @@
       return current;
     }
 
-    // 9. Sun Trimmed Normal
     function sunTrimmedNormal(v, indices, numIter = 20, sigma = 0.3) {
       const faceAdj = buildFaceAdjacency(indices);
       let { normals: fn } = computeFaceProperties(v, indices);
@@ -623,7 +719,6 @@
       return updateVerticesFromNormals(v, indices, fn, numIter);
     }
 
-    // 10. Guided Normal Filter
     function guidedNormalFilter(v, indices, numIter = 20, sigmaS = 1.0, sigmaR = 0.2) {
       const faceAdj = buildFaceAdjacency(indices);
       let { centroids, normals: fn, areas } = computeFaceProperties(v, indices);
@@ -663,7 +758,6 @@
       return updateVerticesFromNormals(v, indices, fn, numIter);
     }
 
-    // 11. L0 Sparse Normal
     function l0SparseNormal(v, indices, beta = 2.0, maxBeta = 100.0, rate = 2.0) {
       const faceAdj = buildFaceAdjacency(indices);
       let { normals: N } = computeFaceProperties(v, indices);
@@ -700,7 +794,6 @@
       return updateVerticesFromNormals(v, indices, N, Math.max(1, stepCount));
     }
 
-    // 12. Median Normal Filtering
     function medianNormalFiltering(v, indices, numIter = 20) {
       const faceAdj = buildFaceAdjacency(indices);
       let { normals: fn } = computeFaceProperties(v, indices);
@@ -736,7 +829,7 @@
     }
 
     // =========================================================================
-    // EVALUATION METRICS & VISUALIZATION UTILS
+    // EVALUATION METRICS & RANKING COMPUTATION
     // =========================================================================
     function applyJetColormap(value) {
       const v = Math.max(0, Math.min(1, value));
@@ -774,6 +867,75 @@
         emd: emdAcc / sampleSize,
         dists
       };
+    }
+
+    function computeAndDisplayRankings(allResults) {
+      // Get individual rank positions for each metric (lower is better)
+      const metricsList = ['rmse', 'chamfer', 'hausdorff', 'emd'];
+      const rankMap = {};
+
+      allResults.forEach(r => {
+        rankMap[r.name] = { name: r.name, metricRanks: {}, avgRank: 0 };
+      });
+
+      metricsList.forEach(m => {
+        const sorted = [...allResults].sort((a, b) => a.metrics[m] - b.metrics[m]);
+        sorted.forEach((item, index) => {
+          rankMap[item.name].metricRanks[m] = index + 1;
+        });
+      });
+
+      // Compute average rank score across all metrics
+      const rankedList = Object.values(rankMap).map(item => {
+        const sum = Object.values(item.metricRanks).reduce((a, b) => a + b, 0);
+        item.avgRank = sum / metricsList.length;
+        return item;
+      });
+
+      // Sort by best average rank score
+      rankedList.sort((a, b) => a.avgRank - b.avgRank);
+
+      // Render Podium Top 3 Cards
+      const top3 = rankedList.slice(0, 3);
+      podiumContainer.innerHTML = `
+        <div class="podium-card gold">
+          <div class="podium-badge">🥇 1st Place</div>
+          <div class="podium-title">${top3[0] ? top3[0].name : '-'}</div>
+          <div class="podium-score">Avg Rank Score: ${top3[0] ? top3[0].avgRank.toFixed(2) : '-'}</div>
+        </div>
+        <div class="podium-card silver">
+          <div class="podium-badge">🥈 2nd Place</div>
+          <div class="podium-title">${top3[1] ? top3[1].name : '-'}</div>
+          <div class="podium-score">Avg Rank Score: ${top3[1] ? top3[1].avgRank.toFixed(2) : '-'}</div>
+        </div>
+        <div class="podium-card bronze">
+          <div class="podium-badge">🥉 3rd Place</div>
+          <div class="podium-title">${top3[2] ? top3[2].name : '-'}</div>
+          <div class="podium-score">Avg Rank Score: ${top3[2] ? top3[2].avgRank.toFixed(2) : '-'}</div>
+        </div>
+      `;
+
+      // Populate Ranking Table
+      rankingsTableBody.innerHTML = '';
+      rankedList.forEach((item, index) => {
+        const rankNum = index + 1;
+        let badgeClass = 'rank-badge';
+        if (rankNum === 1) badgeClass += ' rank-1';
+        if (rankNum === 2) badgeClass += ' rank-2';
+        if (rankNum === 3) badgeClass += ' rank-3';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><span class="${badgeClass}">${rankNum}</span></td>
+          <td><strong>${item.name}</strong></td>
+          <td>${item.avgRank.toFixed(2)}</td>
+          <td>#${item.metricRanks.rmse}</td>
+          <td>#${item.metricRanks.chamfer}</td>
+          <td>#${item.metricRanks.hausdorff}</td>
+          <td>#${item.metricRanks.emd}</td>
+        `;
+        rankingsTableBody.appendChild(tr);
+      });
     }
 
     // =========================================================================
@@ -814,16 +976,18 @@
 
       metricsTableBody.innerHTML = '';
       viewportsGrid.innerHTML = '';
+      const allResults = [];
 
       for (let mIdx = 0; mIdx < methodRegistry.length; mIdx++) {
         const item = methodRegistry[mIdx];
         statusDiv.textContent = `Executing [${mIdx + 1}/12]: ${item.name}...`;
-        await new Promise(r => setTimeout(r, 20)); // Yield to thread
+        await new Promise(r => setTimeout(r, 20)); // Yield thread to render UI updates
 
         const smoothedV = item.func(noisyV);
         const metrics = computeMetrics(gtV, smoothedV);
+        allResults.push({ name: item.name, metrics });
 
-        // 1. Table Row
+        // Populate Metrics Table
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td><strong>${item.name}</strong></td>
@@ -834,7 +998,7 @@
         `;
         metricsTableBody.appendChild(tr);
 
-        // 2. Viewport Card
+        // Populate 3D Viewport
         const card = document.createElement('div');
         card.className = 'viewport-card';
         const cardId = `canvas-container-${mIdx}`;
@@ -850,6 +1014,9 @@
 
         setupViewport(cardId, mIdx, smoothedV, indices, metrics.dists);
       }
+
+      // Calculate and display dynamic rankings
+      computeAndDisplayRankings(allResults);
 
       statusDiv.textContent = 'Benchmark completed successfully!';
       runBtn.disabled = false;
@@ -871,7 +1038,7 @@
       const controls = new THREE.OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
 
-      // Solid Mesh
+      // Solid Mesh Geometry
       const meshGeom = new THREE.BufferGeometry();
       meshGeom.setAttribute('position', new THREE.Float32BufferAttribute(smoothedV, 3));
       meshGeom.setIndex(indices);
@@ -882,7 +1049,7 @@
       const meshObj = new THREE.Mesh(meshGeom, meshMat);
       scene.add(meshObj);
 
-      // Color Map Mesh
+      // Color Map Mesh Geometry
       const colorGeom = meshGeom.clone();
       const nVerts = smoothedV.length / 3;
       const colors = new Float32Array(nVerts * 3);
@@ -899,7 +1066,7 @@
       const colorMat = new THREE.MeshBasicMaterial({ vertexColors: true });
       const colorObj = new THREE.Mesh(colorGeom, colorMat);
 
-      // Lights
+      // Lighting Setup
       scene.add(new THREE.AmbientLight(0xffffff, 0.6));
       const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
       dirLight.position.set(1, 1, 1).normalize();
