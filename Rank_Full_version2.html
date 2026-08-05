@@ -755,12 +755,12 @@
      */
     function hifFlowFull(
       v, indices, A, 
-      thetaSharpDeg = 45.0, 
-      sigmaD = 0.1, 
-      linearityTol = 0.1, 
-      rounds = 20, 
-      alpha = 0.85, 
-      beta = 0.15
+      thetaSharpDeg, 
+      sigmaD, 
+      rounds,
+      linearityTol, 
+      alpha, 
+      beta
     ) {
       const nVerts = v.length / 3;
       let current = new Float32Array(v);
@@ -952,7 +952,7 @@
               const oX = fn[other*3], oY = fn[other*3+1], oZ = fn[other*3+2];
               const dot = Math.max(-1.0, Math.min(1.0, cX*oX + cY*oY + cZ*oZ));
               angleSum += Math.acos(dot);
-            }
+            }0.1
             if (angleSum < minAngleSum) {
               minAngleSum = angleSum;
               bestIdx = candidate;
@@ -1104,7 +1104,7 @@
         { name: "5. Tangential", func: (v) => tangentialRelaxation(v, indices, adj, rounds) },
         { name: "6. Anisotropic", func: (v) => anisotropicFlow(v, indices, adj, rounds) },
         { name: "7. TPS", func: (v) => tangentPlaneSmoothing(v, adj, rounds) },
-        { name: "8. HIF (Proposed)", func: (v) => hifFlowFull(v, indices, adj, thetaSharp, sigmaD, 0.1, rounds, 0.85, 0.15) },
+        { name: "8. HIF (Proposed)", func: (v) => hifFlowFull(v, indices, adj, thetaSharp, sigmaD, rounds, 0.1, 0.85, 0.15) },
         { name: "9. Sun Trimmed", func: (v) => sunTrimmedNormal(v, indices, rounds) },
         { name: "10. Guided Normal", func: (v) => guidedNormalFilter(v, indices, rounds) },
         { name: "11. L0 Sparse", func: (v) => l0SparseNormal(v, indices) },
