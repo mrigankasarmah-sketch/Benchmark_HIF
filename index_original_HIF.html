@@ -96,7 +96,6 @@
     }
 
     .control-group select, 
-    .control-group input[type="range"],
     .control-group input[type="number"],
     .control-group input[type="file"] {
       width: 100%;
@@ -125,16 +124,6 @@
     .btn:hover {
       background-color: var(--accent-hover);
       color: #ffffff;
-    }
-
-    .btn-secondary {
-      background-color: transparent;
-      border: 1px solid var(--border-color);
-      color: var(--text-main);
-    }
-
-    .btn-secondary:hover {
-      background-color: var(--border-color);
     }
 
     .content-area {
@@ -249,24 +238,7 @@
       </div>
 
       <div>
-        <div class="section-title">2. Synthetic Geometry Setup</div>
-        <div class="control-group">
-          <label for="mesh-select">Base Model</label>
-          <select id="mesh-select">
-            <option value="terrain">Synthetic Mountain Terrain</option>
-            <option value="sphere">Icosahedron Sphere</option>
-            <option value="torus">Torus Knot</option>
-          </select>
-        </div>
-        <div class="control-group">
-          <label for="noise-level">Gaussian Noise Level <span id="noise-val">0.03</span></label>
-          <input type="range" id="noise-level" min="0.005" max="0.08" step="0.005" value="0.03">
-        </div>
-        <button class="btn btn-secondary" id="btn-generate">Regenerate Synthetic Mesh</button>
-      </div>
-
-      <div>
-        <div class="section-title">3. Filter Execution & Iterations</div>
+        <div class="section-title">2. Filter Execution & Iterations</div>
         <div class="control-group">
           <label for="rounds-input">Number of Rounds (Iterations)</label>
           <input type="number" id="rounds-input" min="1" max="50" value="5">
@@ -324,7 +296,7 @@
             </tr>
           </thead>
           <tbody id="metrics-tbody">
-            <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Click "Run & Rank Benchmark" to calculate metrics.</td></tr>
+            <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Please upload Ground Truth and Noise files, then click "Run & Rank Benchmark".</td></tr>
           </tbody>
         </table>
       </div>
@@ -369,54 +341,8 @@
     let activeMeshObject = null;
 
     // =========================================================================
-    // 2. GEOMETRY GENERATION & FILE INPUT HANDLERS
+    // 2. FILE INPUT HANDLERS & PARSERS
     // =========================================================================
-    function generateBaseGeometry(type) {
-      let geom;
-      if (type === 'terrain') {
-        geom = new THREE.PlaneGeometry(2, 2, 35, 35);
-        geom.rotateX(-Math.PI / 2);
-        const pos = geom.attributes.position;
-        for (let i = 0; i < pos.count; i++) {
-          let x = pos.getX(i), z = pos.getZ(i);
-          let y = Math.sin(x * 3) * Math.cos(z * 3) * 0.2 + Math.sin(x * 8) * 0.05;
-          pos.setY(i, y);
-        }
-      } else if (type === 'sphere') {
-        geom = new THREE.IcosahedronGeometry(1.2, 3);
-      } else {
-        geom = new THREE.TorusKnotGeometry(0.8, 0.25, 64, 12);
-      }
-      geom.computeVertexNormals();
-
-      const posAttr = geom.attributes.position;
-      originalV = [];
-      for (let i = 0; i < posAttr.count; i++) {
-        originalV.push([posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i)]);
-      }
-
-      faces = [];
-      if (geom.index) {
-        const idx = geom.index.array;
-        for (let i = 0; i < idx.length; i += 3) {
-          faces.push([idx[i], idx[i+1], idx[i+2]]);
-        }
-      } else {
-        for (let i = 0; i < posAttr.count; i += 3) {
-          faces.push([i, i+1, i+2]);
-        }
-      }
-    }
-
-    function addNoise(level) {
-      noisyV = originalV.map(v => [
-        v[0] + (Math.random() - 0.5) * level,
-        v[1] + (Math.random() - 0.5) * level,
-        v[2] + (Math.random() - 0.5) * level
-      ]);
-    }
-
-    // Parse Wavefront .OBJ Files
     function parseOBJ(text) {
       const lines = text.split('\n');
       const verts = [];
@@ -448,8 +374,7 @@
           originalV = parsed.verts;
           if (parsed.faces.length > 0) faces = parsed.faces;
         }
-        if (noisyV.length === 0) addNoise(0.03);
-        runAllAlgorithms();
+        if (noisyV.length > 0) runAllAlgorithms();
       };
       reader.readAsText(file);
     });
@@ -466,7 +391,7 @@
           const parsed = parseOBJ(event.target.result);
           noisyV = parsed.verts;
         }
-        runAllAlgorithms();
+        if (originalV.length > 0) runAllAlgorithms();
       };
       reader.readAsText(file);
     });
@@ -986,6 +911,11 @@
     }
 
     function runAllAlgorithms() {
+      if (!originalV.length || !noisyV.length) {
+        alert("Please upload both Ground Truth and Noise files first.");
+        return;
+      }
+
       document.getElementById('loading').style.display = 'flex';
 
       setTimeout(() => {
@@ -1074,23 +1004,9 @@
       }
     }
 
-    function reinitGeometry() {
-      const type = document.getElementById('mesh-select').value;
-      const noise = parseFloat(document.getElementById('noise-level').value);
-      generateBaseGeometry(type);
-      addNoise(noise);
-      runAllAlgorithms();
-    }
-
     // =========================================================================
     // 7. EVENT LISTENERS & ANIMATION LOOP
     // =========================================================================
-    document.getElementById('noise-level').addEventListener('input', (e) => {
-      document.getElementById('noise-val').textContent = e.target.value;
-    });
-
-    document.getElementById('btn-generate').addEventListener('click', reinitGeometry);
-    document.getElementById('mesh-select').addEventListener('change', reinitGeometry);
     document.getElementById('btn-run-all').addEventListener('click', runAllAlgorithms);
 
     document.getElementById('algorithm-select').addEventListener('change', (e) => {
@@ -1101,8 +1017,6 @@
       const selectedAlg = document.getElementById('algorithm-select').value;
       updateViewport(selectedAlg);
     });
-
-    reinitGeometry();
 
     function animate() {
       requestAnimationFrame(animate);
