@@ -57,7 +57,7 @@
 
     .main-container {
       display: grid;
-      grid-template-columns: 320px 1fr;
+      grid-template-columns: 340px 1fr;
       flex: 1;
       height: calc(100vh - 65px);
     }
@@ -95,7 +95,10 @@
       justify-content: space-between;
     }
 
-    .control-group select, .control-group input[type="range"] {
+    .control-group select, 
+    .control-group input[type="range"],
+    .control-group input[type="number"],
+    .control-group input[type="file"] {
       width: 100%;
       background-color: var(--bg-primary);
       border: 1px solid var(--border-color);
@@ -116,6 +119,7 @@
       transition: background-color 0.2s ease;
       width: 100%;
       text-align: center;
+      margin-top: 0.25rem;
     }
 
     .btn:hover {
@@ -198,6 +202,11 @@
       color: #0f172a;
     }
 
+    .rank-badge {
+      font-weight: bold;
+      color: var(--accent-color);
+    }
+
     .loading-overlay {
       position: absolute;
       top: 0;
@@ -228,7 +237,19 @@
     <!-- SIDEBAR CONTROLS -->
     <div class="sidebar">
       <div>
-        <div class="section-title">1. Geometry Setup</div>
+        <div class="section-title">1. File Uploads</div>
+        <div class="control-group">
+          <label for="gt-upload">Upload Ground Truth (.obj/.json)</label>
+          <input type="file" id="gt-upload" accept=".obj,.json">
+        </div>
+        <div class="control-group">
+          <label for="noise-upload">Upload Noise File (.obj/.json)</label>
+          <input type="file" id="noise-upload" accept=".obj,.json">
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title">2. Synthetic Geometry Setup</div>
         <div class="control-group">
           <label for="mesh-select">Base Model</label>
           <select id="mesh-select">
@@ -238,14 +259,18 @@
           </select>
         </div>
         <div class="control-group">
-          <label for="noise-level">Gaussian Noise <span id="noise-val">0.03</span></label>
+          <label for="noise-level">Gaussian Noise Level <span id="noise-val">0.03</span></label>
           <input type="range" id="noise-level" min="0.005" max="0.08" step="0.005" value="0.03">
         </div>
-        <button class="btn btn-secondary" id="btn-generate">Regenerate Noisy Mesh</button>
+        <button class="btn btn-secondary" id="btn-generate">Regenerate Synthetic Mesh</button>
       </div>
 
       <div>
-        <div class="section-title">2. Filter Execution</div>
+        <div class="section-title">3. Filter Execution & Iterations</div>
+        <div class="control-group">
+          <label for="rounds-input">Number of Rounds (Iterations)</label>
+          <input type="number" id="rounds-input" min="1" max="50" value="5">
+        </div>
         <div class="control-group">
           <label for="algorithm-select">Display Filter</label>
           <select id="algorithm-select">
@@ -273,7 +298,7 @@
             <option value="smooth">Smooth Shaded</option>
           </select>
         </div>
-        <button class="btn" id="btn-run-all">Run Full 12-Algorithm Benchmark</button>
+        <button class="btn" id="btn-run-all">Run & Rank Benchmark</button>
       </div>
     </div>
 
@@ -286,10 +311,11 @@
 
       <!-- METRICS BENCHMARK TABLE -->
       <div class="metrics-panel">
-        <div class="section-title">Geometric Error Metrics (Lower is Better)</div>
+        <div class="section-title">Ranked Performance Metrics (Lower Error is Better)</div>
         <table>
           <thead>
             <tr>
+              <th>Rank</th>
               <th>Algorithm Method</th>
               <th>RMSE ↓</th>
               <th>Chamfer ↓</th>
@@ -298,7 +324,7 @@
             </tr>
           </thead>
           <tbody id="metrics-tbody">
-            <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Click "Run Full 12-Algorithm Benchmark" to calculate metrics.</td></tr>
+            <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Click "Run & Rank Benchmark" to calculate metrics.</td></tr>
           </tbody>
         </table>
       </div>
@@ -324,7 +350,6 @@
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
-    // Ambient & Directional Lighting
     scene.add(new THREE.AmbientLight(0xffffff, 0.6));
     const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
     dirLight1.position.set(5, 10, 7);
@@ -339,13 +364,12 @@
       renderer.setSize(container.clientWidth, container.clientHeight);
     });
 
-    // Mesh Data Cache
     let originalV = [], noisyV = [], faces = [];
     let processedResults = {};
     let activeMeshObject = null;
 
     // =========================================================================
-    // 2. GEOMETRY GENERATION HELPERS
+    // 2. GEOMETRY GENERATION & FILE INPUT HANDLERS
     // =========================================================================
     function generateBaseGeometry(type) {
       let geom;
@@ -365,7 +389,6 @@
       }
       geom.computeVertexNormals();
 
-      // Extract raw vertices and indices
       const posAttr = geom.attributes.position;
       originalV = [];
       for (let i = 0; i < posAttr.count; i++) {
@@ -392,6 +415,61 @@
         v[2] + (Math.random() - 0.5) * level
       ]);
     }
+
+    // Parse Wavefront .OBJ Files
+    function parseOBJ(text) {
+      const lines = text.split('\n');
+      const verts = [];
+      const fcs = [];
+      for (let line of lines) {
+        line = line.trim();
+        if (line.startsWith('v ')) {
+          const parts = line.split(/\s+/).slice(1).map(Number);
+          verts.push([parts[0], parts[1], parts[2]]);
+        } else if (line.startsWith('f ')) {
+          const parts = line.split(/\s+/).slice(1).map(p => parseInt(p.split('/')[0]) - 1);
+          if (parts.length >= 3) fcs.push([parts[0], parts[1], parts[2]]);
+        }
+      }
+      return { verts, faces: fcs };
+    }
+
+    document.getElementById('gt-upload').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (file.name.endsWith('.json')) {
+          const data = JSON.parse(event.target.result);
+          originalV = data.vertices || data;
+          if (data.faces) faces = data.faces;
+        } else {
+          const parsed = parseOBJ(event.target.result);
+          originalV = parsed.verts;
+          if (parsed.faces.length > 0) faces = parsed.faces;
+        }
+        if (noisyV.length === 0) addNoise(0.03);
+        runAllAlgorithms();
+      };
+      reader.readAsText(file);
+    });
+
+    document.getElementById('noise-upload').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (file.name.endsWith('.json')) {
+          const data = JSON.parse(event.target.result);
+          noisyV = data.vertices || data;
+        } else {
+          const parsed = parseOBJ(event.target.result);
+          noisyV = parsed.verts;
+        }
+        runAllAlgorithms();
+      };
+      reader.readAsText(file);
+    });
 
     // =========================================================================
     // 3. GRAPH & GEOMETRY TOPOLOGY HELPERS
@@ -505,8 +583,6 @@
     // =========================================================================
     // 4. THE 12 SMOOTHING & NORMAL FILTERING ALGORITHMS
     // =========================================================================
-
-    // 1. Laplacian
     function laplacianSmoothing(verts, adj, lambda = 0.5, rounds = 5) {
       let curr = verts.map(v => [...v]);
       for (let r = 0; r < rounds; r++) {
@@ -528,7 +604,6 @@
       return curr;
     }
 
-    // 2. Taubin
     function taubinSmoothing(verts, adj, lambda = 0.5, mu = -0.53, rounds = 5) {
       let curr = verts.map(v => [...v]);
       for (let r = 0; r < rounds; r++) {
@@ -538,7 +613,6 @@
       return curr;
     }
 
-    // 3. Bilateral Mesh Denoising
     function bilateralSmoothing(verts, facesList, adj, sigmaS = 0.1, sigmaR = 0.05, rounds = 3) {
       let curr = verts.map(v => [...v]);
       for (let r = 0; r < rounds; r++) {
@@ -568,7 +642,6 @@
       return curr;
     }
 
-    // 4. Mean Curvature Flow (MCF)
     function meanCurvatureFlow(verts, facesList, adj, stepSize = 0.085, rounds = 5) {
       let curr = verts.map(v => [...v]);
       for (let r = 0; r < rounds; r++) {
@@ -593,7 +666,6 @@
       return curr;
     }
 
-    // 5. Tangential Relaxation
     function tangentialRelaxation(verts, facesList, adj, stepSize = 0.085, rounds = 5) {
       let curr = verts.map(v => [...v]);
       for (let r = 0; r < rounds; r++) {
@@ -623,7 +695,6 @@
       return curr;
     }
 
-    // 6. Anisotropic Flow
     function anisotropicFlow(verts, facesList, adj, alpha = 0.85, beta = 0.15, rounds = 5) {
       let curr = verts.map(v => [...v]);
       for (let r = 0; r < rounds; r++) {
@@ -650,7 +721,6 @@
       return curr;
     }
 
-    // 7. Tangent Plane Smoothing (TPS)
     function tangentPlaneSmoothing(verts, adj, stepSize = 0.085, rounds = 5) {
       let curr = verts.map(v => [...v]);
       for (let r = 0; r < rounds; r++) {
@@ -673,7 +743,6 @@
       return curr;
     }
 
-    // 8. HIF-Flow (Incenter Target Implementation)
     function hifFlow(verts, facesList, alpha = 0.85, beta = 0.15, rounds = 5) {
       let curr = verts.map(v => [...v]);
       const vertexFaces = Array.from({ length: verts.length }, () => []);
@@ -722,7 +791,6 @@
       return curr;
     }
 
-    // 9. Sun Trimmed Normal
     function sunTrimmedNormal(verts, facesList, sigma = 0.3, numIter = 3) {
       const faceAdj = buildFaceAdjacency(facesList);
       let { normals: fn } = computeFaceProperties(verts, facesList);
@@ -748,7 +816,6 @@
       return updateVerticesFromNormals(verts, facesList, fn);
     }
 
-    // 10. Guided Normal Filter
     function guidedNormalFilter(verts, facesList, sigmaS = 0.5, sigmaR = 0.2, numIter = 3) {
       const faceAdj = buildFaceAdjacency(facesList);
       let { centroids, normals: fn, areas } = computeFaceProperties(verts, facesList);
@@ -785,7 +852,6 @@
       return updateVerticesFromNormals(verts, facesList, fn);
     }
 
-    // 11. L0 Sparse Normal
     function l0SparseNormal(verts, facesList, beta = 2.0, maxBeta = 30.0, rate = 2.0) {
       const faceAdj = buildFaceAdjacency(facesList);
       let { normals: N } = computeFaceProperties(verts, facesList);
@@ -817,7 +883,6 @@
       return updateVerticesFromNormals(verts, facesList, N);
     }
 
-    // 12. Median Normal Filtering
     function medianNormalFiltering(verts, facesList, numIter = 3) {
       const faceAdj = buildFaceAdjacency(facesList);
       let { normals: fn } = computeFaceProperties(verts, facesList);
@@ -872,7 +937,6 @@
       const chamfer = sumDist / N;
       const hausdorff = maxDist;
 
-      // Approximate EMD via subsampled Greedy Bipartite Matching
       const sampleSize = Math.min(150, N);
       let emdApprox = 0;
       for (let i = 0; i < sampleSize; i++) {
@@ -888,7 +952,8 @@
         RMSE: rmse.toFixed(6),
         Chamfer: chamfer.toFixed(6),
         Hausdorff: hausdorff.toFixed(6),
-        EMD: emdApprox.toFixed(6)
+        EMD: emdApprox.toFixed(6),
+        rawRMSE: rmse
       };
     }
 
@@ -925,22 +990,23 @@
 
       setTimeout(() => {
         const adj = buildAdjacency(noisyV.length, faces);
+        const rounds = parseInt(document.getElementById('rounds-input').value) || 5;
         
         processedResults = {
           "Original (GT)": originalV,
           "Noisy Mesh": noisyV,
-          "1. Laplacian": laplacianSmoothing(noisyV, adj),
-          "2. Taubin": taubinSmoothing(noisyV, adj),
-          "3. Bilateral": bilateralSmoothing(noisyV, faces, adj),
-          "4. MCF": meanCurvatureFlow(noisyV, faces, adj),
-          "5. Tangential": tangentialRelaxation(noisyV, faces, adj),
-          "6. Anisotropic": anisotropicFlow(noisyV, faces, adj),
-          "7. TPS": tangentPlaneSmoothing(noisyV, adj),
-          "8. HIF (Proposed)": hifFlow(noisyV, faces),
-          "9. Sun Trimmed": sunTrimmedNormal(noisyV, faces),
-          "10. Guided Normal": guidedNormalFilter(noisyV, faces),
+          "1. Laplacian": laplacianSmoothing(noisyV, adj, 0.5, rounds),
+          "2. Taubin": taubinSmoothing(noisyV, adj, 0.5, -0.53, rounds),
+          "3. Bilateral": bilateralSmoothing(noisyV, faces, adj, 0.1, 0.05, rounds),
+          "4. MCF": meanCurvatureFlow(noisyV, faces, adj, 0.085, rounds),
+          "5. Tangential": tangentialRelaxation(noisyV, faces, adj, 0.085, rounds),
+          "6. Anisotropic": anisotropicFlow(noisyV, faces, adj, 0.85, 0.15, rounds),
+          "7. TPS": tangentPlaneSmoothing(noisyV, adj, 0.085, rounds),
+          "8. HIF (Proposed)": hifFlow(noisyV, faces, 0.85, 0.15, rounds),
+          "9. Sun Trimmed": sunTrimmedNormal(noisyV, faces, 0.3, rounds),
+          "10. Guided Normal": guidedNormalFilter(noisyV, faces, 0.5, 0.2, rounds),
           "11. L0 Sparse": l0SparseNormal(noisyV, faces),
-          "12. Median Normal": medianNormalFiltering(noisyV, faces)
+          "12. Median Normal": medianNormalFiltering(noisyV, faces, rounds)
         };
 
         updateTable();
@@ -955,21 +1021,29 @@
       const tbody = document.getElementById('metrics-tbody');
       tbody.innerHTML = '';
 
+      let resultsList = [];
       Object.keys(processedResults).forEach(name => {
         if (name === "Original (GT)") return;
         const resV = processedResults[name];
         const m = computeMetrics(originalV, resV);
+        resultsList.push({ name, metrics: m });
+      });
 
-        const isHIF = name.includes("HIF");
+      // Rank algorithms based on RMSE performance (lower is better)
+      resultsList.sort((a, b) => a.metrics.rawRMSE - b.metrics.rawRMSE);
+
+      resultsList.forEach((item, index) => {
+        const isHIF = item.name.includes("HIF");
         const tr = document.createElement('tr');
         if (isHIF) tr.className = 'highlight-row';
 
         tr.innerHTML = `
-          <td>${name} ${isHIF ? '<span class="badge">PROPOSED</span>' : ''}</td>
-          <td>${m.RMSE}</td>
-          <td>${m.Chamfer}</td>
-          <td>${m.Hausdorff}</td>
-          <td>${m.EMD}</td>
+          <td><span class="rank-badge">#${index + 1}</span></td>
+          <td>${item.name} ${isHIF ? '<span class="badge">PROPOSED</span>' : ''}</td>
+          <td>${item.metrics.RMSE}</td>
+          <td>${item.metrics.Chamfer}</td>
+          <td>${item.metrics.Hausdorff}</td>
+          <td>${item.metrics.EMD}</td>
         `;
         tbody.appendChild(tr);
       });
@@ -1028,7 +1102,6 @@
       updateViewport(selectedAlg);
     });
 
-    // Start App
     reinitGeometry();
 
     function animate() {
