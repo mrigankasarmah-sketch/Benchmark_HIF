@@ -8,6 +8,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <!-- OrbitControls for camera interaction -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- STLLoader for parsing .stl files (Binary and ASCII) -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
   <style>
     :root {
       --bg-primary: #0f172a;
@@ -226,14 +228,14 @@
     <!-- SIDEBAR CONTROLS -->
     <div class="sidebar">
       <div>
-        <div class="section-title">1. File Uploads</div>
+        <div class="section-title">1. File Uploads (.obj, .off, .stl, .json)</div>
         <div class="control-group">
-          <label for="gt-upload">Upload Ground Truth (.obj/.json)</label>
-          <input type="file" id="gt-upload" accept=".obj,.json">
+          <label for="gt-upload">Upload Ground Truth</label>
+          <input type="file" id="gt-upload" accept=".obj,.off,.stl,.json">
         </div>
         <div class="control-group">
-          <label for="noise-upload">Upload Noise File (.obj/.json)</label>
-          <input type="file" id="noise-upload" accept=".obj,.json">
+          <label for="noise-upload">Upload Noise File</label>
+          <input type="file" id="noise-upload" accept=".obj,.off,.stl,.json">
         </div>
       </div>
 
@@ -341,7 +343,7 @@
     let activeMeshObject = null;
 
     // =========================================================================
-    // 2. FILE INPUT HANDLERS & PARSERS
+    // 2. FILE PARSERS (.OBJ, .OFF, .STL, .JSON)
     // =========================================================================
     function parseOBJ(text) {
       const lines = text.split('\n');
@@ -360,40 +362,138 @@
       return { verts, faces: fcs };
     }
 
+    function parseOFF(text) {
+      const tokens = [];
+      const lines = text.split(/\r?\n/);
+      for (let line of lines) {
+        const commentIdx = line.indexOf('#');
+        if (commentIdx !== -1) line = line.substring(0, commentIdx);
+        line = line.trim();
+        if (!line) continue;
+        const parts = line.split(/\s+/);
+        for (let p of parts) tokens.push(p);
+      }
+
+      let tIdx = 0;
+      let header = tokens[tIdx++];
+      if (header.toUpperCase() !== 'OFF') {
+        // If header token was actually the vertex count or combined
+      }
+
+      const numVerts = parseInt(tokens[tIdx++]);
+      const numFaces = parseInt(tokens[tIdx++]);
+      tIdx++; // Skip edge count if present
+
+      const verts = [];
+      for (let i = 0; i < numVerts; i++) {
+        verts.push([
+          parseFloat(tokens[tIdx++]),
+          parseFloat(tokens[tIdx++]),
+          parseFloat(tokens[tIdx++])
+        ]);
+      }
+
+      const faces = [];
+      for (let i = 0; i < numFaces; i++) {
+        const nV = parseInt(tokens[tIdx++]);
+        const faceVerts = [];
+        for (let j = 0; j < nV; j++) {
+          faceVerts.push(parseInt(tokens[tIdx++]));
+        }
+        // Triangulate polygons via triangle fan
+        for (let j = 1; j < faceVerts.length - 1; j++) {
+          faces.push([faceVerts[0], faceVerts[j], faceVerts[j + 1]]);
+        }
+      }
+      return { verts, faces };
+    }
+
+    function geometryToIndexedMesh(geometry) {
+      const posAttr = geometry.attributes.position;
+      const rawVerts = [];
+      for (let i = 0; i < posAttr.count; i++) {
+        rawVerts.push([posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i)]);
+      }
+
+      const verts = [];
+      const fcs = [];
+      const map = new Map();
+      const tolerance = 1e-5;
+
+      function getKey(v) {
+        return `${Math.round(v[0]/tolerance)}_${Math.round(v[1]/tolerance)}_${Math.round(v[2]/tolerance)}`;
+      }
+
+      for (let i = 0; i < rawVerts.length; i += 3) {
+        const triFace = [];
+        for (let j = 0; j < 3; j++) {
+          const v = rawVerts[i + j];
+          const key = getKey(v);
+          if (map.has(key)) {
+            triFace.push(map.get(key));
+          } else {
+            const newIdx = verts.length;
+            verts.push(v);
+            map.set(key, newIdx);
+            triFace.push(newIdx);
+          }
+        }
+        fcs.push(triFace);
+      }
+      return { verts, faces: fcs };
+    }
+
+    function handleFileLoad(file, callback) {
+      const name = file.name.toLowerCase();
+      const reader = new FileReader();
+
+      if (name.endsWith('.stl')) {
+        reader.onload = (e) => {
+          const loader = new THREE.STLLoader();
+          const geometry = loader.parse(e.target.result);
+          const meshData = geometryToIndexedMesh(geometry);
+          callback(meshData.verts, meshData.faces);
+        };
+        reader.readAsArrayBuffer(file);
+      } else {
+        reader.onload = (e) => {
+          const text = e.target.result;
+          let parsed;
+          if (name.endsWith('.json')) {
+            const data = JSON.parse(text);
+            parsed = {
+              verts: data.vertices || data,
+              faces: data.faces || faces
+            };
+          } else if (name.endsWith('.off')) {
+            parsed = parseOFF(text);
+          } else {
+            parsed = parseOBJ(text);
+          }
+          callback(parsed.verts, parsed.faces);
+        };
+        reader.readAsText(file);
+      }
+    }
+
     document.getElementById('gt-upload').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (file.name.endsWith('.json')) {
-          const data = JSON.parse(event.target.result);
-          originalV = data.vertices || data;
-          if (data.faces) faces = data.faces;
-        } else {
-          const parsed = parseOBJ(event.target.result);
-          originalV = parsed.verts;
-          if (parsed.faces.length > 0) faces = parsed.faces;
-        }
+      handleFileLoad(file, (v, f) => {
+        originalV = v;
+        if (f && f.length > 0) faces = f;
         if (noisyV.length > 0) runAllAlgorithms();
-      };
-      reader.readAsText(file);
+      });
     });
 
     document.getElementById('noise-upload').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (file.name.endsWith('.json')) {
-          const data = JSON.parse(event.target.result);
-          noisyV = data.vertices || data;
-        } else {
-          const parsed = parseOBJ(event.target.result);
-          noisyV = parsed.verts;
-        }
+      handleFileLoad(file, (v, f) => {
+        noisyV = v;
+        if (f && f.length > 0 && faces.length === 0) faces = f;
         if (originalV.length > 0) runAllAlgorithms();
-      };
-      reader.readAsText(file);
+      });
     });
 
     // =========================================================================
@@ -959,7 +1059,6 @@
         resultsList.push({ name, metrics: m });
       });
 
-      // Rank algorithms based on RMSE performance (lower is better)
       resultsList.sort((a, b) => a.metrics.rawRMSE - b.metrics.rawRMSE);
 
       resultsList.forEach((item, index) => {
