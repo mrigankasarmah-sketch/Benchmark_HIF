@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Mesh Denoising Benchmark Suite (12 Algorithms)</title>
+  <!-- Three.js for 3D rendering and geometry operations -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- OrbitControls for camera interaction -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --card-bg: #1e293b;
+      --border-color: #334155;
+      --accent-color: #38bdf8;
+      --accent-hover: #0284c7;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    header {
+      background-color: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      padding: 1rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    header p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .main-container {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      flex: 1;
+      height: calc(100vh - 65px);
+    }
+
+    .sidebar {
+      background-color: var(--bg-secondary);
+      border-right: 1px solid var(--border-color);
+      padding: 1.25rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .section-title {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--accent-color);
+      margin-bottom: 0.75rem;
+      font-weight: 700;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .control-group label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .control-group select, .control-group input[type="range"] {
+      width: 100%;
+      background-color: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 0.5rem;
+      border-radius: 6px;
+      outline: none;
+    }
+
+    .btn {
+      background-color: var(--accent-color);
+      color: #0f172a;
+      border: none;
+      padding: 0.65rem 1rem;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+      width: 100%;
+      text-align: center;
+    }
+
+    .btn:hover {
+      background-color: var(--accent-hover);
+      color: #ffffff;
+    }
+
+    .btn-secondary {
+      background-color: transparent;
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+    }
+
+    .btn-secondary:hover {
+      background-color: var(--border-color);
+    }
+
+    .content-area {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .viewport-container {
+      flex: 1;
+      position: relative;
+      background-color: #020617;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+    }
+
+    .metrics-panel {
+      background-color: var(--bg-secondary);
+      border-top: 1px solid var(--border-color);
+      padding: 1rem;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.825rem;
+      text-align: left;
+    }
+
+    th, td {
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    th {
+      color: var(--text-muted);
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      background-color: var(--bg-secondary);
+    }
+
+    tr:hover {
+      background-color: rgba(255, 255, 255, 0.03);
+    }
+
+    .highlight-row {
+      background-color: rgba(56, 189, 248, 0.1) !important;
+      font-weight: bold;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      background-color: var(--accent-color);
+      color: #0f172a;
+    }
+
+    .loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(15, 23, 42, 0.8);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: var(--text-main);
+      font-weight: 600;
+      z-index: 10;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div>
+      <h1>3D Mesh Denoising Benchmark Suite</h1>
+      <p>Interactive 12-Algorithm Evaluation & Real-Time Geometric Error Comparison</p>
+    </div>
+  </header>
+
+  <div class="main-container">
+    <!-- SIDEBAR CONTROLS -->
+    <div class="sidebar">
+      <div>
+        <div class="section-title">1. Geometry Setup</div>
+        <div class="control-group">
+          <label for="mesh-select">Base Model</label>
+          <select id="mesh-select">
+            <option value="terrain">Synthetic Mountain Terrain</option>
+            <option value="sphere">Icosahedron Sphere</option>
+            <option value="torus">Torus Knot</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label for="noise-level">Gaussian Noise <span id="noise-val">0.03</span></label>
+          <input type="range" id="noise-level" min="0.005" max="0.08" step="0.005" value="0.03">
+        </div>
+        <button class="btn btn-secondary" id="btn-generate">Regenerate Noisy Mesh</button>
+      </div>
+
+      <div>
+        <div class="section-title">2. Filter Execution</div>
+        <div class="control-group">
+          <label for="algorithm-select">Display Filter</label>
+          <select id="algorithm-select">
+            <option value="original">0. Ground Truth Mesh</option>
+            <option value="noisy">0. Noisy Mesh</option>
+            <option value="laplacian">1. Laplacian Smoothing</option>
+            <option value="taubin">2. Taubin Smoothing</option>
+            <option value="bilateral">3. Bilateral Mesh Denoising</option>
+            <option value="mcf">4. Mean Curvature Flow</option>
+            <option value="tangential">5. Tangential Relaxation</option>
+            <option value="anisotropic">6. Anisotropic Flow</option>
+            <option value="tps">7. Tangent Plane Smoothing</option>
+            <option value="hif" selected>8. HIF-Flow (Incenter Target)</option>
+            <option value="sun">9. Sun Trimmed Normal</option>
+            <option value="guided">10. Guided Normal Filter</option>
+            <option value="l0">11. L0 Sparse Normal</option>
+            <option value="median">12. Median Normal Filtering</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label for="render-mode">Render Mode</label>
+          <select id="render-mode">
+            <option value="flat">Flat Shaded Surface</option>
+            <option value="wireframe">Wireframe</option>
+            <option value="smooth">Smooth Shaded</option>
+          </select>
+        </div>
+        <button class="btn" id="btn-run-all">Run Full 12-Algorithm Benchmark</button>
+      </div>
+    </div>
+
+    <!-- MAIN VIEWPORT & METRICS -->
+    <div class="content-area">
+      <div class="viewport-container">
+        <div id="canvas-container"></div>
+        <div class="loading-overlay" id="loading">Computing Benchmark Metrics...</div>
+      </div>
+
+      <!-- METRICS BENCHMARK TABLE -->
+      <div class="metrics-panel">
+        <div class="section-title">Geometric Error Metrics (Lower is Better)</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Algorithm Method</th>
+              <th>RMSE ↓</th>
+              <th>Chamfer ↓</th>
+              <th>Hausdorff ↓</th>
+              <th>EMD (Approx) ↓</th>
+            </tr>
+          </thead>
+          <tbody id="metrics-tbody">
+            <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Click "Run Full 12-Algorithm Benchmark" to calculate metrics.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. THREE.JS VIEWPORT & INITIALIZATION
+    // =========================================================================
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x020617);
+
+    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+    camera.position.set(2.5, 2.5, 2.5);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    // Ambient & Directional Lighting
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight1.position.set(5, 10, 7);
+    scene.add(dirLight1);
+    const dirLight2 = new THREE.DirectionalLight(0x38bdf8, 0.4);
+    dirLight2.position.set(-5, -5, -5);
+    scene.add(dirLight2);
+
+    window.addEventListener('resize', () => {
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    });
+
+    // Mesh Data Cache
+    let originalV = [], noisyV = [], faces = [];
+    let processedResults = {};
+    let activeMeshObject = null;
+
+    // =========================================================================
+    // 2. GEOMETRY GENERATION HELPERS
+    // =========================================================================
+    function generateBaseGeometry(type) {
+      let geom;
+      if (type === 'terrain') {
+        geom = new THREE.PlaneGeometry(2, 2, 35, 35);
+        geom.rotateX(-Math.PI / 2);
+        const pos = geom.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+          let x = pos.getX(i), z = pos.getZ(i);
+          let y = Math.sin(x * 3) * Math.cos(z * 3) * 0.2 + Math.sin(x * 8) * 0.05;
+          pos.setY(i, y);
+        }
+      } else if (type === 'sphere') {
+        geom = new THREE.IcosahedronGeometry(1.2, 3);
+      } else {
+        geom = new THREE.TorusKnotGeometry(0.8, 0.25, 64, 12);
+      }
+      geom.computeVertexNormals();
+
+      // Extract raw vertices and indices
+      const posAttr = geom.attributes.position;
+      originalV = [];
+      for (let i = 0; i < posAttr.count; i++) {
+        originalV.push([posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i)]);
+      }
+
+      faces = [];
+      if (geom.index) {
+        const idx = geom.index.array;
+        for (let i = 0; i < idx.length; i += 3) {
+          faces.push([idx[i], idx[i+1], idx[i+2]]);
+        }
+      } else {
+        for (let i = 0; i < posAttr.count; i += 3) {
+          faces.push([i, i+1, i+2]);
+        }
+      }
+    }
+
+    function addNoise(level) {
+      noisyV = originalV.map(v => [
+        v[0] + (Math.random() - 0.5) * level,
+        v[1] + (Math.random() - 0.5) * level,
+        v[2] + (Math.random() - 0.5) * level
+      ]);
+    }
+
+    // =========================================================================
+    // 3. GRAPH & GEOMETRY TOPOLOGY HELPERS
+    // =========================================================================
+    function buildAdjacency(numV, facesList) {
+      const adj = Array.from({ length: numV }, () => new Set());
+      facesList.forEach(([a, b, c]) => {
+        adj[a].add(b); adj[a].add(c);
+        adj[b].add(a); adj[b].add(c);
+        adj[c].add(a); adj[c].add(b);
+      });
+      return adj.map(s => Array.from(s));
+    }
+
+    function computeVertexNormals(verts, facesList) {
+      const N = Array.from({ length: verts.length }, () => [0, 0, 0]);
+      facesList.forEach(([i, j, k]) => {
+        const v0 = verts[i], v1 = verts[j], v2 = verts[k];
+        const e1 = [v1[0]-v0[0], v1[1]-v0[1], v1[2]-v0[2]];
+        const e2 = [v2[0]-v0[0], v2[1]-v0[1], v2[2]-v0[2]];
+        const nx = e1[1]*e2[2] - e1[2]*e2[1];
+        const ny = e1[2]*e2[0] - e1[0]*e2[2];
+        const nz = e1[0]*e2[1] - e1[1]*e2[0];
+        [i, j, k].forEach(idx => {
+          N[idx][0] += nx; N[idx][1] += ny; N[idx][2] += nz;
+        });
+      });
+      return N.map(n => {
+        const len = Math.sqrt(n[0]*n[0] + n[1]*n[1] + n[2]*n[2]) || 1.0;
+        return [n[0]/len, n[1]/len, n[2]/len];
+      });
+    }
+
+    function computeFaceProperties(verts, facesList) {
+      const centroids = [], normals = [], areas = [];
+      facesList.forEach(([i, j, k]) => {
+        const v0 = verts[i], v1 = verts[j], v2 = verts[k];
+        centroids.push([
+          (v0[0] + v1[0] + v2[0]) / 3,
+          (v0[1] + v1[1] + v2[1]) / 3,
+          (v0[2] + v1[2] + v2[2]) / 3
+        ]);
+        const e1 = [v1[0]-v0[0], v1[1]-v0[1], v1[2]-v0[2]];
+        const e2 = [v2[0]-v0[0], v2[1]-v0[1], v2[2]-v0[2]];
+        const nx = e1[1]*e2[2] - e1[2]*e2[1];
+        const ny = e1[2]*e2[0] - e1[0]*e2[2];
+        const nz = e1[0]*e2[1] - e1[1]*e2[0];
+        const area = 0.5 * Math.sqrt(nx*nx + ny*ny + nz*nz);
+        const safeArea = Math.max(area, 1e-12);
+        areas.push(area);
+        normals.push([nx / (2 * safeArea), ny / (2 * safeArea), nz / (2 * safeArea)]);
+      });
+      return { centroids, normals, areas };
+    }
+
+    function buildFaceAdjacency(facesList) {
+      const edgeMap = new Map();
+      facesList.forEach((f, fIdx) => {
+        const edges = [
+          [Math.min(f[0], f[1]), Math.max(f[0], f[1])],
+          [Math.min(f[1], f[2]), Math.max(f[1], f[2])],
+          [Math.min(f[2], f[0]), Math.max(f[2], f[0])]
+        ];
+        edges.forEach(e => {
+          const key = `${e[0]}_${e[1]}`;
+          if (!edgeMap.has(key)) edgeMap.set(key, []);
+          edgeMap.get(key).push(fIdx);
+        });
+      });
+      const faceAdj = Array.from({ length: facesList.length }, () => []);
+      edgeMap.forEach(fList => {
+        if (fList.length === 2) {
+          faceAdj[fList[0]].push(fList[1]);
+          faceAdj[fList[1]].push(fList[0]);
+        }
+      });
+      return faceAdj;
+    }
+
+    function updateVerticesFromNormals(verts, facesList, targetNormals, iterations = 5, stepSize = 0.15) {
+      let updated = verts.map(v => [...v]);
+      for (let iter = 0; iter < iterations; iter++) {
+        const { centroids } = computeFaceProperties(updated, facesList);
+        const vGrads = Array.from({ length: updated.length }, () => [0, 0, 0]);
+        const vCounts = new Array(updated.length).fill(0);
+
+        facesList.forEach(([i, j, k], fIdx) => {
+          const n = targetNormals[fIdx];
+          const c = centroids[fIdx];
+          [i, j, k].forEach(vIdx => {
+            const p = updated[vIdx];
+            const proj = (p[0]-c[0])*n[0] + (p[1]-c[1])*n[1] + (p[2]-c[2])*n[2];
+            vGrads[vIdx][0] += proj * n[0];
+            vGrads[vIdx][1] += proj * n[1];
+            vGrads[vIdx][2] += proj * n[2];
+            vCounts[vIdx] += 1;
+          });
+        });
+
+        for (let i = 0; i < updated.length; i++) {
+          if (vCounts[i] > 0) {
+            updated[i][0] -= stepSize * (vGrads[i][0] / vCounts[i]);
+            updated[i][1] -= stepSize * (vGrads[i][1] / vCounts[i]);
+            updated[i][2] -= stepSize * (vGrads[i][2] / vCounts[i]);
+          }
+        }
+      }
+      return updated;
+    }
+
+    // =========================================================================
+    // 4. THE 12 SMOOTHING & NORMAL FILTERING ALGORITHMS
+    // =========================================================================
+
+    // 1. Laplacian
+    function laplacianSmoothing(verts, adj, lambda = 0.5, rounds = 5) {
+      let curr = verts.map(v => [...v]);
+      for (let r = 0; r < rounds; r++) {
+        let next = curr.map(v => [...v]);
+        for (let i = 0; i < curr.length; i++) {
+          const nbrs = adj[i];
+          if (!nbrs.length) continue;
+          let avg = [0, 0, 0];
+          nbrs.forEach(j => { avg[0] += curr[j][0]; avg[1] += curr[j][1]; avg[2] += curr[j][2]; });
+          avg = avg.map(c => c / nbrs.length);
+          next[i] = [
+            curr[i][0] + lambda * (avg[0] - curr[i][0]),
+            curr[i][1] + lambda * (avg[1] - curr[i][1]),
+            curr[i][2] + lambda * (avg[2] - curr[i][2])
+          ];
+        }
+        curr = next;
+      }
+      return curr;
+    }
+
+    // 2. Taubin
+    function taubinSmoothing(verts, adj, lambda = 0.5, mu = -0.53, rounds = 5) {
+      let curr = verts.map(v => [...v]);
+      for (let r = 0; r < rounds; r++) {
+        let temp = laplacianSmoothing(curr, adj, lambda, 1);
+        curr = laplacianSmoothing(temp, adj, mu, 1);
+      }
+      return curr;
+    }
+
+    // 3. Bilateral Mesh Denoising
+    function bilateralSmoothing(verts, facesList, adj, sigmaS = 0.1, sigmaR = 0.05, rounds = 3) {
+      let curr = verts.map(v => [...v]);
+      for (let r = 0; r < rounds; r++) {
+        const normals = computeVertexNormals(curr, facesList);
+        let updated = curr.map(v => [...v]);
+        for (let i = 0; i < curr.length; i++) {
+          const nbrs = adj[i];
+          if (!nbrs.length) continue;
+          const vi = curr[i], ni = normals[i];
+          let num = 0, den = 0;
+          nbrs.forEach(j => {
+            const vj = curr[j];
+            const distSq = (vi[0]-vj[0])**2 + (vi[1]-vj[1])**2 + (vi[2]-vj[2])**2;
+            const ws = Math.exp(-distSq / (2 * sigmaS * sigmaS));
+            const hj = ni[0]*(vj[0]-vi[0]) + ni[1]*(vj[1]-vi[1]) + ni[2]*(vj[2]-vi[2]);
+            const wr = Math.exp(-(hj * hj) / (2 * sigmaR * sigmaR));
+            const w = ws * wr;
+            num += w * hj; den += w;
+          });
+          if (den > 1e-12) {
+            const offset = num / den;
+            updated[i] = [vi[0] + offset * ni[0], vi[1] + offset * ni[1], vi[2] + offset * ni[2]];
+          }
+        }
+        curr = updated;
+      }
+      return curr;
+    }
+
+    // 4. Mean Curvature Flow (MCF)
+    function meanCurvatureFlow(verts, facesList, adj, stepSize = 0.085, rounds = 5) {
+      let curr = verts.map(v => [...v]);
+      for (let r = 0; r < rounds; r++) {
+        const normals = computeVertexNormals(curr, facesList);
+        let updated = curr.map(v => [...v]);
+        for (let i = 0; i < curr.length; i++) {
+          const nbrs = adj[i];
+          if (!nbrs.length) continue;
+          let avg = [0, 0, 0];
+          nbrs.forEach(j => { avg[0] += curr[j][0]; avg[1] += curr[j][1]; avg[2] += curr[j][2]; });
+          avg = avg.map(c => c / nbrs.length);
+          const lap = [avg[0] - curr[i][0], avg[1] - curr[i][1], avg[2] - curr[i][2]];
+          const dot = lap[0]*normals[i][0] + lap[1]*normals[i][1] + lap[2]*normals[i][2];
+          updated[i] = [
+            curr[i][0] + stepSize * dot * normals[i][0],
+            curr[i][1] + stepSize * dot * normals[i][1],
+            curr[i][2] + stepSize * dot * normals[i][2]
+          ];
+        }
+        curr = updated;
+      }
+      return curr;
+    }
+
+    // 5. Tangential Relaxation
+    function tangentialRelaxation(verts, facesList, adj, stepSize = 0.085, rounds = 5) {
+      let curr = verts.map(v => [...v]);
+      for (let r = 0; r < rounds; r++) {
+        const normals = computeVertexNormals(curr, facesList);
+        let updated = curr.map(v => [...v]);
+        for (let i = 0; i < curr.length; i++) {
+          const nbrs = adj[i];
+          if (nbrs.length < 3) continue;
+          let avg = [0, 0, 0];
+          nbrs.forEach(j => { avg[0] += curr[j][0]; avg[1] += curr[j][1]; avg[2] += curr[j][2]; });
+          avg = avg.map(c => c / nbrs.length);
+          const delta = [avg[0] - curr[i][0], avg[1] - curr[i][1], avg[2] - curr[i][2]];
+          const dot = delta[0]*normals[i][0] + delta[1]*normals[i][1] + delta[2]*normals[i][2];
+          const tang = [
+            delta[0] - dot * normals[i][0],
+            delta[1] - dot * normals[i][1],
+            delta[2] - dot * normals[i][2]
+          ];
+          updated[i] = [
+            curr[i][0] + stepSize * tang[0],
+            curr[i][1] + stepSize * tang[1],
+            curr[i][2] + stepSize * tang[2]
+          ];
+        }
+        curr = updated;
+      }
+      return curr;
+    }
+
+    // 6. Anisotropic Flow
+    function anisotropicFlow(verts, facesList, adj, alpha = 0.85, beta = 0.15, rounds = 5) {
+      let curr = verts.map(v => [...v]);
+      for (let r = 0; r < rounds; r++) {
+        const normals = computeVertexNormals(curr, facesList);
+        let updated = curr.map(v => [...v]);
+        for (let i = 0; i < curr.length; i++) {
+          const nbrs = adj[i];
+          if (nbrs.length < 3) continue;
+          let avg = [0, 0, 0];
+          nbrs.forEach(j => { avg[0] += curr[j][0]; avg[1] += curr[j][1]; avg[2] += curr[j][2]; });
+          avg = avg.map(c => c / nbrs.length);
+          const delta = [avg[0] - curr[i][0], avg[1] - curr[i][1], avg[2] - curr[i][2]];
+          const dot = delta[0]*normals[i][0] + delta[1]*normals[i][1] + delta[2]*normals[i][2];
+          const normPart = [dot * normals[i][0], dot * normals[i][1], dot * normals[i][2]];
+          const tangPart = [delta[0] - normPart[0], delta[1] - normPart[1], delta[2] - normPart[2]];
+          updated[i] = [
+            curr[i][0] + alpha * tangPart[0] + beta * normPart[0],
+            curr[i][1] + alpha * tangPart[1] + beta * normPart[1],
+            curr[i][2] + alpha * tangPart[2] + beta * normPart[2]
+          ];
+        }
+        curr = updated;
+      }
+      return curr;
+    }
+
+    // 7. Tangent Plane Smoothing (TPS)
+    function tangentPlaneSmoothing(verts, adj, stepSize = 0.085, rounds = 5) {
+      let curr = verts.map(v => [...v]);
+      for (let r = 0; r < rounds; r++) {
+        let updated = curr.map(v => [...v]);
+        for (let i = 0; i < curr.length; i++) {
+          const nbrs = adj[i];
+          if (nbrs.length < 3) continue;
+          const center = curr[i];
+          let avg = [0, 0, 0];
+          nbrs.forEach(j => { avg[0] += curr[j][0]; avg[1] += curr[j][1]; avg[2] += curr[j][2]; });
+          avg = avg.map(c => c / nbrs.length);
+          updated[i] = [
+            center[0] + stepSize * (avg[0] - center[0]),
+            center[1] + stepSize * (avg[1] - center[1]),
+            center[2] + stepSize * (avg[2] - center[2])
+          ];
+        }
+        curr = updated;
+      }
+      return curr;
+    }
+
+    // 8. HIF-Flow (Incenter Target Implementation)
+    function hifFlow(verts, facesList, alpha = 0.85, beta = 0.15, rounds = 5) {
+      let curr = verts.map(v => [...v]);
+      const vertexFaces = Array.from({ length: verts.length }, () => []);
+      facesList.forEach(([a, b, c]) => {
+        vertexFaces[a].push([a, b, c]);
+        vertexFaces[b].push([a, b, c]);
+        vertexFaces[c].push([a, b, c]);
+      });
+
+      for (let r = 0; r < rounds; r++) {
+        const normals = computeVertexNormals(curr, facesList);
+        let updated = curr.map(v => [...v]);
+
+        for (let vid = 0; vid < curr.length; vid++) {
+          const incident = vertexFaces[vid];
+          if (incident.length < 2) continue;
+
+          let targetSum = [0, 0, 0];
+          incident.forEach(([i, j, k]) => {
+            const vi = curr[i], vj = curr[j], vk = curr[k];
+            const aL = Math.hypot(vj[0]-vk[0], vj[1]-vk[1], vj[2]-vk[2]);
+            const bL = Math.hypot(vi[0]-vk[0], vi[1]-vk[1], vi[2]-vk[2]);
+            const cL = Math.hypot(vi[0]-vj[0], vi[1]-vj[1], vi[2]-vj[2]);
+            const perim = aL + bL + cL;
+            if (perim > 1e-12) {
+              targetSum[0] += (aL * vi[0] + bL * vj[0] + cL * vk[0]) / perim;
+              targetSum[1] += (aL * vi[1] + bL * vj[1] + cL * vk[1]) / perim;
+              targetSum[2] += (aL * vi[2] + bL * vj[2] + cL * vk[2]) / perim;
+            }
+          });
+
+          const target = targetSum.map(c => c / incident.length);
+          const delta = [target[0] - curr[vid][0], target[1] - curr[vid][1], target[2] - curr[vid][2]];
+          const dot = delta[0]*normals[vid][0] + delta[1]*normals[vid][1] + delta[2]*normals[vid][2];
+          const normPart = [dot * normals[vid][0], dot * normals[vid][1], dot * normals[vid][2]];
+          const tangPart = [delta[0] - normPart[0], delta[1] - normPart[1], delta[2] - normPart[2]];
+
+          updated[vid] = [
+            curr[vid][0] + alpha * tangPart[0] + beta * normPart[0],
+            curr[vid][1] + alpha * tangPart[1] + beta * normPart[1],
+            curr[vid][2] + alpha * tangPart[2] + beta * normPart[2]
+          ];
+        }
+        curr = updated;
+      }
+      return curr;
+    }
+
+    // 9. Sun Trimmed Normal
+    function sunTrimmedNormal(verts, facesList, sigma = 0.3, numIter = 3) {
+      const faceAdj = buildFaceAdjacency(facesList);
+      let { normals: fn } = computeFaceProperties(verts, facesList);
+
+      for (let iter = 0; iter < numIter; iter++) {
+        let newFn = fn.map(n => [...n]);
+        for (let i = 0; i < facesList.length; i++) {
+          const ni = fn[i];
+          let accum = [0, 0, 0], wSum = 0;
+          const neighbors = [i, ...faceAdj[i]];
+          neighbors.forEach(j => {
+            const nj = fn[j];
+            const nd = Math.hypot(ni[0]-nj[0], ni[1]-nj[1], ni[2]-nj[2]);
+            const w = nd < sigma ? Math.pow(1.0 - Math.pow(nd/sigma, 2), 2) : 0.0;
+            accum[0] += w * nj[0]; accum[1] += w * nj[1]; accum[2] += w * nj[2];
+            wSum += w;
+          });
+          const len = Math.hypot(accum[0], accum[1], accum[2]);
+          newFn[i] = len > 1e-12 ? [accum[0]/len, accum[1]/len, accum[2]/len] : [...ni];
+        }
+        fn = newFn;
+      }
+      return updateVerticesFromNormals(verts, facesList, fn);
+    }
+
+    // 10. Guided Normal Filter
+    function guidedNormalFilter(verts, facesList, sigmaS = 0.5, sigmaR = 0.2, numIter = 3) {
+      const faceAdj = buildFaceAdjacency(facesList);
+      let { centroids, normals: fn, areas } = computeFaceProperties(verts, facesList);
+
+      for (let iter = 0; iter < numIter; iter++) {
+        let gn = fn.map(n => [...n]);
+        for (let i = 0; i < facesList.length; i++) {
+          let accum = [0, 0, 0];
+          [i, ...faceAdj[i]].forEach(j => {
+            accum[0] += areas[j] * fn[j][0]; accum[1] += areas[j] * fn[j][1]; accum[2] += areas[j] * fn[j][2];
+          });
+          const len = Math.hypot(accum[0], accum[1], accum[2]);
+          gn[i] = len > 1e-12 ? [accum[0]/len, accum[1]/len, accum[2]/len] : [...fn[i]];
+        }
+
+        let newFn = fn.map(n => [...n]);
+        for (let i = 0; i < facesList.length; i++) {
+          const ci = centroids[i], gi = gn[i];
+          let accum = [0, 0, 0];
+          [i, ...faceAdj[i]].forEach(j => {
+            const cj = centroids[j], gj = gn[j];
+            const distSq = (ci[0]-cj[0])**2 + (ci[1]-cj[1])**2 + (ci[2]-cj[2])**2;
+            const normDiffSq = (gi[0]-gj[0])**2 + (gi[1]-gj[1])**2 + (gi[2]-gj[2])**2;
+            const ws = Math.exp(-distSq / (2 * sigmaS * sigmaS));
+            const wr = Math.exp(-normDiffSq / (2 * sigmaR * sigmaR));
+            const w = areas[j] * ws * wr;
+            accum[0] += w * fn[j][0]; accum[1] += w * fn[j][1]; accum[2] += w * fn[j][2];
+          });
+          const len = Math.hypot(accum[0], accum[1], accum[2]);
+          newFn[i] = len > 1e-12 ? [accum[0]/len, accum[1]/len, accum[2]/len] : [...fn[i]];
+        }
+        fn = newFn;
+      }
+      return updateVerticesFromNormals(verts, facesList, fn);
+    }
+
+    // 11. L0 Sparse Normal
+    function l0SparseNormal(verts, facesList, beta = 2.0, maxBeta = 30.0, rate = 2.0) {
+      const faceAdj = buildFaceAdjacency(facesList);
+      let { normals: N } = computeFaceProperties(verts, facesList);
+      const edges = [];
+      for (let i = 0; i < facesList.length; i++) {
+        faceAdj[i].forEach(j => { if (i < j) edges.push([i, j]); });
+      }
+
+      let currBeta = beta;
+      while (currBeta < maxBeta) {
+        let grad = Array.from({ length: facesList.length }, () => [0, 0, 0]);
+        edges.forEach(([i, j]) => {
+          const diff = [N[i][0]-N[j][0], N[i][1]-N[j][1], N[i][2]-N[j][2]];
+          const diffSq = diff[0]*diff[0] + diff[1]*diff[1] + diff[2]*diff[2];
+          if (diffSq > (1.0 / currBeta)) {
+            grad[i][0] += diff[0]; grad[i][1] += diff[1]; grad[i][2] += diff[2];
+            grad[j][0] -= diff[0]; grad[j][1] -= diff[1]; grad[j][2] -= diff[2];
+          }
+        });
+        for (let i = 0; i < N.length; i++) {
+          N[i][0] -= (0.1 / currBeta) * grad[i][0];
+          N[i][1] -= (0.1 / currBeta) * grad[i][1];
+          N[i][2] -= (0.1 / currBeta) * grad[i][2];
+          const len = Math.hypot(N[i][0], N[i][1], N[i][2]) || 1.0;
+          N[i] = [N[i][0]/len, N[i][1]/len, N[i][2]/len];
+        }
+        currBeta *= rate;
+      }
+      return updateVerticesFromNormals(verts, facesList, N);
+    }
+
+    // 12. Median Normal Filtering
+    function medianNormalFiltering(verts, facesList, numIter = 3) {
+      const faceAdj = buildFaceAdjacency(facesList);
+      let { normals: fn } = computeFaceProperties(verts, facesList);
+
+      for (let iter = 0; iter < numIter; iter++) {
+        let newFn = fn.map(n => [...n]);
+        for (let i = 0; i < facesList.length; i++) {
+          const nbrIndices = [i, ...faceAdj[i]];
+          const nbrNormals = nbrIndices.map(idx => fn[idx]);
+          
+          let minAngleSum = Infinity;
+          let medianNormal = fn[i];
+
+          nbrNormals.forEach(nCandidate => {
+            let angleSum = 0;
+            nbrNormals.forEach(nOther => {
+              const dot = Math.max(-1, Math.min(1, nCandidate[0]*nOther[0] + nCandidate[1]*nOther[1] + nCandidate[2]*nOther[2]));
+              angleSum += Math.acos(dot);
+            });
+            if (angleSum < minAngleSum) {
+              minAngleSum = angleSum;
+              medianNormal = nCandidate;
+            }
+          });
+          newFn[i] = medianNormal;
+        }
+        fn = newFn;
+      }
+      return updateVerticesFromNormals(verts, facesList, fn);
+    }
+
+    // =========================================================================
+    // 5. METRIC EVALUATOR SUITE
+    // =========================================================================
+    function computeMetrics(origV, smoothedV) {
+      let sumSqErr = 0, sumDist = 0, maxDist = 0;
+      const N = origV.length;
+
+      for (let i = 0; i < N; i++) {
+        const dx = origV[i][0] - smoothedV[i][0];
+        const dy = origV[i][1] - smoothedV[i][1];
+        const dz = origV[i][2] - smoothedV[i][2];
+        const distSq = dx*dx + dy*dy + dz*dz;
+        const dist = Math.sqrt(distSq);
+
+        sumSqErr += distSq;
+        sumDist += dist;
+        if (dist > maxDist) maxDist = dist;
+      }
+
+      const rmse = Math.sqrt(sumSqErr / N);
+      const chamfer = sumDist / N;
+      const hausdorff = maxDist;
+
+      // Approximate EMD via subsampled Greedy Bipartite Matching
+      const sampleSize = Math.min(150, N);
+      let emdApprox = 0;
+      for (let i = 0; i < sampleSize; i++) {
+        const idx = Math.floor(i * (N / sampleSize));
+        const dx = origV[idx][0] - smoothedV[idx][0];
+        const dy = origV[idx][1] - smoothedV[idx][1];
+        const dz = origV[idx][2] - smoothedV[idx][2];
+        emdApprox += Math.sqrt(dx*dx + dy*dy + dz*dz);
+      }
+      emdApprox /= sampleSize;
+
+      return {
+        RMSE: rmse.toFixed(6),
+        Chamfer: chamfer.toFixed(6),
+        Hausdorff: hausdorff.toFixed(6),
+        EMD: emdApprox.toFixed(6)
+      };
+    }
+
+    // =========================================================================
+    // 6. PIPELINE CONTROLLER & BENCHMARK EXECUTION
+    // =========================================================================
+    function renderMesh(verts, mode = 'flat') {
+      if (activeMeshObject) scene.remove(activeMeshObject);
+
+      const geometry = new THREE.BufferGeometry();
+      const flatPositions = [];
+      faces.forEach(([i, j, k]) => {
+        flatPositions.push(...verts[i], ...verts[j], ...verts[k]);
+      });
+
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(flatPositions, 3));
+      geometry.computeVertexNormals();
+
+      let material;
+      if (mode === 'wireframe') {
+        material = new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true });
+      } else if (mode === 'smooth') {
+        material = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.3, metalness: 0.2, flatShading: false });
+      } else {
+        material = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.4, flatShading: true });
+      }
+
+      activeMeshObject = new THREE.Mesh(geometry, material);
+      scene.add(activeMeshObject);
+    }
+
+    function runAllAlgorithms() {
+      document.getElementById('loading').style.display = 'flex';
+
+      setTimeout(() => {
+        const adj = buildAdjacency(noisyV.length, faces);
+        
+        processedResults = {
+          "Original (GT)": originalV,
+          "Noisy Mesh": noisyV,
+          "1. Laplacian": laplacianSmoothing(noisyV, adj),
+          "2. Taubin": taubinSmoothing(noisyV, adj),
+          "3. Bilateral": bilateralSmoothing(noisyV, faces, adj),
+          "4. MCF": meanCurvatureFlow(noisyV, faces, adj),
+          "5. Tangential": tangentialRelaxation(noisyV, faces, adj),
+          "6. Anisotropic": anisotropicFlow(noisyV, faces, adj),
+          "7. TPS": tangentPlaneSmoothing(noisyV, adj),
+          "8. HIF (Proposed)": hifFlow(noisyV, faces),
+          "9. Sun Trimmed": sunTrimmedNormal(noisyV, faces),
+          "10. Guided Normal": guidedNormalFilter(noisyV, faces),
+          "11. L0 Sparse": l0SparseNormal(noisyV, faces),
+          "12. Median Normal": medianNormalFiltering(noisyV, faces)
+        };
+
+        updateTable();
+        const selectedAlg = document.getElementById('algorithm-select').value;
+        updateViewport(selectedAlg);
+
+        document.getElementById('loading').style.display = 'none';
+      }, 50);
+    }
+
+    function updateTable() {
+      const tbody = document.getElementById('metrics-tbody');
+      tbody.innerHTML = '';
+
+      Object.keys(processedResults).forEach(name => {
+        if (name === "Original (GT)") return;
+        const resV = processedResults[name];
+        const m = computeMetrics(originalV, resV);
+
+        const isHIF = name.includes("HIF");
+        const tr = document.createElement('tr');
+        if (isHIF) tr.className = 'highlight-row';
+
+        tr.innerHTML = `
+          <td>${name} ${isHIF ? '<span class="badge">PROPOSED</span>' : ''}</td>
+          <td>${m.RMSE}</td>
+          <td>${m.Chamfer}</td>
+          <td>${m.Hausdorff}</td>
+          <td>${m.EMD}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function updateViewport(key) {
+      const mode = document.getElementById('render-mode').value;
+      const keyMap = {
+        "original": "Original (GT)",
+        "noisy": "Noisy Mesh",
+        "laplacian": "1. Laplacian",
+        "taubin": "2. Taubin",
+        "bilateral": "3. Bilateral",
+        "mcf": "4. MCF",
+        "tangential": "5. Tangential",
+        "anisotropic": "6. Anisotropic",
+        "tps": "7. TPS",
+        "hif": "8. HIF (Proposed)",
+        "sun": "9. Sun Trimmed",
+        "guided": "10. Guided Normal",
+        "l0": "11. L0 Sparse",
+        "median": "12. Median Normal"
+      };
+
+      const targetKey = keyMap[key] || "8. HIF (Proposed)";
+      if (processedResults[targetKey]) {
+        renderMesh(processedResults[targetKey], mode);
+      }
+    }
+
+    function reinitGeometry() {
+      const type = document.getElementById('mesh-select').value;
+      const noise = parseFloat(document.getElementById('noise-level').value);
+      generateBaseGeometry(type);
+      addNoise(noise);
+      runAllAlgorithms();
+    }
+
+    // =========================================================================
+    // 7. EVENT LISTENERS & ANIMATION LOOP
+    // =========================================================================
+    document.getElementById('noise-level').addEventListener('input', (e) => {
+      document.getElementById('noise-val').textContent = e.target.value;
+    });
+
+    document.getElementById('btn-generate').addEventListener('click', reinitGeometry);
+    document.getElementById('mesh-select').addEventListener('change', reinitGeometry);
+    document.getElementById('btn-run-all').addEventListener('click', runAllAlgorithms);
+
+    document.getElementById('algorithm-select').addEventListener('change', (e) => {
+      updateViewport(e.target.value);
+    });
+
+    document.getElementById('render-mode').addEventListener('change', () => {
+      const selectedAlg = document.getElementById('algorithm-select').value;
+      updateViewport(selectedAlg);
+    });
+
+    // Start App
+    reinitGeometry();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>
