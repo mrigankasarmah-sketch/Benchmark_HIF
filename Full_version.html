@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>3D Mesh Denoising Benchmark Suite</title>
+  <style>
+    :root {
+      --bg-color: #121214;
+      --card-bg: #1e1e24;
+      --accent-color: #007acc;
+      --text-color: #e0e0e0;
+      --border-color: #33333d;
+      --gold-color: #ffd700;
+      --silver-color: #c0c0c0;
+      --bronze-color: #cd7f32;
+    }
+    body {
+      margin: 0;
+      padding: 20px;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    h1, h2 {
+      margin-top: 0;
+      font-weight: 600;
+    }
+    .control-panel {
+      background-color: var(--card-bg);
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      margin-bottom: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: center;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    label {
+      font-size: 0.85rem;
+      color: #aaa;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    input[type="file"], input[type="range"], input[type="number"] {
+      background: #121214;
+      color: #fff;
+      padding: 6px;
+      border-radius: 4px;
+      border: 1px solid var(--border-color);
+    }
+    button#run-btn {
+      background-color: var(--accent-color);
+      color: white;
+      border: none;
+      padding: 10px 24px;
+      font-size: 1rem;
+      font-weight: bold;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-left: auto;
+      transition: background 0.2s;
+    }
+    button#run-btn:hover {
+      background-color: #005999;
+    }
+    button#run-btn:disabled {
+      background-color: #444;
+      cursor: not-allowed;
+    }
+    #status {
+      font-size: 0.9rem;
+      color: #00d2ff;
+      margin-bottom: 15px;
+      font-weight: 500;
+    }
+
+    /* Podium Display */
+    .podium-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    .podium-card {
+      background-color: var(--card-bg);
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .podium-card.gold { border-top: 4px solid var(--gold-color); }
+    .podium-card.silver { border-top: 4px solid var(--silver-color); }
+    .podium-card.bronze { border-top: 4px solid var(--bronze-color); }
+
+    .podium-badge {
+      font-size: 0.8rem;
+      font-weight: bold;
+      padding: 4px 12px;
+      border-radius: 12px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .gold .podium-badge { background: rgba(255, 215, 0, 0.2); color: var(--gold-color); }
+    .silver .podium-badge { background: rgba(192, 192, 192, 0.2); color: var(--silver-color); }
+    .bronze .podium-badge { background: rgba(205, 127, 50, 0.2); color: var(--bronze-color); }
+
+    .podium-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .podium-score {
+      font-size: 0.85rem;
+      color: #aaa;
+    }
+    
+    /* Table Styling */
+    .table-container {
+      background-color: var(--card-bg);
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      overflow-x: auto;
+      margin-bottom: 30px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+    th, td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 0.9rem;
+    }
+    th {
+      background-color: #17171c;
+      color: #888;
+      font-weight: 600;
+    }
+    tr:hover {
+      background-color: #25252e;
+    }
+    .rank-badge {
+      font-weight: bold;
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      line-height: 24px;
+      text-align: center;
+      border-radius: 50%;
+      background: #333;
+      font-size: 0.8rem;
+    }
+    .rank-1 { background: var(--gold-color); color: #000; }
+    .rank-2 { background: var(--silver-color); color: #000; }
+    .rank-3 { background: var(--bronze-color); color: #000; }
+
+    /* 3D Viewports Grid */
+    .viewports-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 20px;
+    }
+    .viewport-card {
+      background-color: var(--card-bg);
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .viewport-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #fff;
+    }
+    .canvas-container {
+      width: 100%;
+      height: 260px;
+      background-color: #000;
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+    .canvas-container canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
+    .view-toggle {
+      display: flex;
+      gap: 10px;
+    }
+    .view-toggle button {
+      flex: 1;
+      padding: 6px;
+      background: #121214;
+      border: 1px solid var(--border-color);
+      color: #ccc;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .view-toggle button.active {
+      background: var(--accent-color);
+      color: #fff;
+      border-color: var(--accent-color);
+    }
+  </style>
+
+  <!-- Three.js and OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+</head>
+<body>
+
+  <h1>3D Mesh Denoising Benchmark Suite</h1>
+
+  <div class="control-panel">
+    <div class="control-group">
+      <label for="gt-file">Ground Truth Mesh (.obj, .stl, .off)</label>
+      <input type="file" id="gt-file" accept=".obj,.stl,.off">
+    </div>
+    <div class="control-group">
+      <label for="noisy-file">Noisy Mesh (.obj, .stl, .off)</label>
+      <input type="file" id="noisy-file" accept=".obj,.stl,.off">
+    </div>
+    <div class="control-group">
+      <label for="rounds-slider">Rounds (n): <span id="rounds-val">20</span></label>
+      <input type="range" id="rounds-slider" min="1" max="100" value="20">
+    </div>
+    <div class="control-group">
+      <label for="hif-theta">HIF Theta Sharp (°)</label>
+      <input type="number" id="hif-theta" value="45" step="1" style="width: 70px;">
+    </div>
+    <div class="control-group">
+      <label for="hif-sigma">HIF Sigma D</label>
+      <input type="number" id="hif-sigma" value="0.1" step="0.01" style="width: 70px;">
+    </div>
+    <button id="run-btn">EXECUTE BENCHMARK</button>
+  </div>
+
+  <div id="status">Upload both Ground Truth and Noisy mesh files to begin.</div>
+
+  <!-- SECTION: METHOD RANKINGS -->
+  <h2>1. Overall Method Rankings</h2>
+  <div class="podium-container" id="podium-container">
+    <div class="podium-card gold">
+      <div class="podium-badge">🥇 1st Place</div>
+      <div class="podium-title">-</div>
+      <div class="podium-score">Execute benchmark to reveal winner</div>
+    </div>
+    <div class="podium-card silver">
+      <div class="podium-badge">🥈 2nd Place</div>
+      <div class="podium-title">-</div>
+      <div class="podium-score">Execute benchmark to reveal runner-up</div>
+    </div>
+    <div class="podium-card bronze">
+      <div class="podium-badge">🥉 3rd Place</div>
+      <div class="podium-title">-</div>
+      <div class="podium-score">Execute benchmark to reveal 3rd place</div>
+    </div>
+  </div>
+
+  <div class="table-container">
+    <table id="rankings-table">
+      <thead>
+        <tr>
+          <th>Overall Rank</th>
+          <th>Method Name</th>
+          <th>Avg. Performance Rank ↓</th>
+          <th>RMSE Rank</th>
+          <th>Chamfer Rank</th>
+          <th>Hausdorff Rank</th>
+          <th>EMD Rank</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="7" style="text-align:center; color:#666;">No rankings evaluated yet.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SECTION: METRICS TABLE -->
+  <h2>2. Detailed Metrics Comparison</h2>
+  <div class="table-container">
+    <table id="metrics-table">
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>RMSE ↓</th>
+          <th>Chamfer ↓</th>
+          <th>Hausdorff ↓</th>
+          <th>EMD ↓</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="5" style="text-align:center; color:#666;">No results evaluated yet.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SECTION: 3D VIEWPORTS -->
+  <h2>3. Interactive 3D Denoised Visualizations</h2>
+  <div class="viewports-grid" id="viewports-grid"></div>
+
+  <script>
+    // --- Global State ---
+    let gtGeometry = null;
+    let noisyGeometry = null;
+
+    // --- DOM Elements ---
+    const gtFileInput = document.getElementById('gt-file');
+    const noisyFileInput = document.getElementById('noisy-file');
+    const roundsSlider = document.getElementById('rounds-slider');
+    const roundsVal = document.getElementById('rounds-val');
+    const hifThetaInput = document.getElementById('hif-theta');
+    const hifSigmaInput = document.getElementById('hif-sigma');
+    const runBtn = document.getElementById('run-btn');
+    const statusDiv = document.getElementById('status');
+    const metricsTableBody = document.querySelector('#metrics-table tbody');
+    const rankingsTableBody = document.querySelector('#rankings-table tbody');
+    const podiumContainer = document.getElementById('podium-container');
+    const viewportsGrid = document.getElementById('viewports-grid');
+
+    roundsSlider.addEventListener('input', (e) => roundsVal.textContent = e.target.value);
+
+    // --- Mesh File Parser ---
+    function parseOFF(text) {
+      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0 && !l.startsWith('#'));
+      let headerIdx = lines[0].toUpperCase() === 'OFF' ? 1 : 0;
+      let counts = lines[headerIdx].split(/\s+/).map(Number);
+      if (lines[0].toUpperCase() !== 'OFF') counts = lines[0].substring(3).trim().split(/\s+/).map(Number);
+      
+      const nVerts = counts[0], nFaces = counts[1];
+      const vertices = [], indices = [];
+      let lineIdx = headerIdx + 1;
+
+      for (let i = 0; i < nVerts; i++) {
+        const parts = lines[lineIdx++].split(/\s+/).map(Number);
+        vertices.push(parts[0], parts[1], parts[2]);
+      }
+      for (let i = 0; i < nFaces; i++) {
+        const parts = lines[lineIdx++].split(/\s+/).map(Number);
+        if (parts[0] === 3) indices.push(parts[1], parts[2], parts[3]);
+        else if (parts[0] === 4) {
+          indices.push(parts[1], parts[2], parts[3]);
+          indices.push(parts[1], parts[3], parts[4]);
+        }
+      }
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+      geom.setIndex(indices);
+      geom.computeVertexNormals();
+      return geom;
+    }
+
+    async function loadMeshFile(file) {
+      const ext = file.name.split('.').pop().toLowerCase();
+      const arrayBuffer = await file.arrayBuffer();
+      const textDecoder = new TextDecoder();
+
+      if (ext === 'obj') {
+        const obj = new THREE.OBJLoader().parse(textDecoder.decode(arrayBuffer));
+        let geom = null;
+        obj.traverse((child) => { if (child.isMesh && !geom) geom = child.geometry.clone(); });
+        return geom;
+      } else if (ext === 'stl') {
+        return new THREE.STLLoader().parse(arrayBuffer);
+      } else if (ext === 'off') {
+        return parseOFF(textDecoder.decode(arrayBuffer));
+      }
+    }
+
+    gtFileInput.addEventListener('change', async (e) => {
+      if (e.target.files[0]) {
+        gtGeometry = await loadMeshFile(e.target.files[0]);
+        statusDiv.textContent = `Ground Truth loaded (${gtGeometry.attributes.position.count} vertices)`;
+      }
+    });
+
+    noisyFileInput.addEventListener('change', async (e) => {
+      if (e.target.files[0]) {
+        noisyGeometry = await loadMeshFile(e.target.files[0]);
+        statusDiv.textContent = `Noisy Mesh loaded (${noisyGeometry.attributes.position.count} vertices)`;
+      }
+    });
+
+    // =========================================================================
+    // GEOMETRY & ADJACENCY HELPERS
+    // =========================================================================
+    function buildVertexAdjacency(nVerts, indices) {
+      const adj = Array.from({ length: nVerts }, () => new Set());
+      for (let i = 0; i < indices.length; i += 3) {
+        const a = indices[i], b = indices[i+1], c = indices[i+2];
+        adj[a].add(b); adj[a].add(c);
+        adj[b].add(a); adj[b].add(c);
+        adj[c].add(a); adj[c].add(b);
+      }
+      return adj.map(s => Array.from(s));
+    }
+
+    function computeVertexNormals(v, indices) {
+      const nVerts = v.length / 3;
+      const N = new Float32Array(nVerts * 3);
+      for (let i = 0; i < indices.length; i += 3) {
+        const i1 = indices[i]*3, i2 = indices[i+1]*3, i3 = indices[i+2]*3;
+        const e1x = v[i2]-v[i1], e1y = v[i2+1]-v[i1+1], e1z = v[i2+2]-v[i1+2];
+        const e2x = v[i3]-v[i1], e2y = v[i3+1]-v[i1+1], e2z = v[i3+2]-v[i1+2];
+        const nx = e1y*e2z - e1z*e2y, ny = e1z*e2x - e1x*e2z, nz = e1x*e2y - e1y*e2x;
+        N[i1] += nx; N[i1+1] += ny; N[i1+2] += nz;
+        N[i2] += nx; N[i2+1] += ny; N[i2+2] += nz;
+        N[i3] += nx; N[i3+1] += ny; N[i3+2] += nz;
+      }
+      for (let i = 0; i < nVerts; i++) {
+        const len = Math.hypot(N[i*3], N[i*3+1], N[i*3+2]) || 1.0;
+        N[i*3] /= len; N[i*3+1] /= len; N[i*3+2] /= len;
+      }
+      return N;
+    }
+
+    function computeFaceProperties(v, indices) {
+      const nFaces = indices.length / 3;
+      const centroids = new Float32Array(nFaces * 3);
+      const normals = new Float32Array(nFaces * 3);
+      const areas = new Float32Array(nFaces);
+
+      for (let i = 0; i < nFaces; i++) {
+        const a = indices[i*3]*3, b = indices[i*3+1]*3, c = indices[i*3+2]*3;
+        centroids[i*3] = (v[a] + v[b] + v[c]) / 3.0;
+        centroids[i*3+1] = (v[a+1] + v[b+1] + v[c+1]) / 3.0;
+        centroids[i*3+2] = (v[a+2] + v[b+2] + v[c+2]) / 3.0;
+
+        const e1x = v[b]-v[a], e1y = v[b+1]-v[a+1], e1z = v[b+2]-v[a+2];
+        const e2x = v[c]-v[a], e2y = v[c+1]-v[a+1], e2z = v[c+2]-v[a+2];
+        const nx = e1y*e2z - e1z*e2y, ny = e1z*e2x - e1x*e2z, nz = e1x*e2y - e1y*e2x;
+        const norm = Math.hypot(nx, ny, nz);
+        areas[i] = 0.5 * norm;
+        const safeNorm = Math.max(norm, 1e-12);
+        normals[i*3] = nx / safeNorm;
+        normals[i*3+1] = ny / safeNorm;
+        normals[i*3+2] = nz / safeNorm;
+      }
+      return { centroids, normals, areas };
+    }
+
+    function buildFaceAdjacency(indices) {
+      const nFaces = indices.length / 3;
+      const edgeToFaces = new Map();
+      for (let f = 0; f < nFaces; f++) {
+        const tri = [indices[f*3], indices[f*3+1], indices[f*3+2]];
+        const edges = [[tri[0], tri[1]], [tri[1], tri[2]], [tri[2], tri[0]]];
+        for (let e of edges) {
+          const key = e[0] < e[1] ? `${e[0]}_${e[1]}` : `${e[1]}_${e[0]}`;
+          if (!edgeToFaces.has(key)) edgeToFaces.set(key, []);
+          edgeToFaces.get(key).push(f);
+        }
+      }
+      const faceAdj = Array.from({ length: nFaces }, () => []);
+      for (let fList of edgeToFaces.values()) {
+        if (fList.length === 2) {
+          faceAdj[fList[0]].push(fList[1]);
+          faceAdj[fList[1]].push(fList[0]);
+        }
+      }
+      return faceAdj;
+    }
+
+    function updateVerticesFromNormals(vertices, indices, fn, iterations = 20, stepSize = 0.15) {
+      let v = new Float32Array(vertices);
+      const nVerts = v.length / 3;
+      const nFaces = indices.length / 3;
+
+      for (let iter = 0; iter < iterations; iter++) {
+        const vGrads = new Float32Array(nVerts * 3);
+        const vCounts = new Float32Array(nVerts);
+
+        for (let f = 0; f < nFaces; f++) {
+          const fnX = fn[f*3], fnY = fn[f*3+1], fnZ = fn[f*3+2];
+          const a = indices[f*3]*3, b = indices[f*3+1]*3, c = indices[f*3+2]*3;
+          const cX = (v[a] + v[b] + v[c]) / 3.0;
+          const cY = (v[a+1] + v[b+1] + v[c+1]) / 3.0;
+          const cZ = (v[a+2] + v[b+2] + v[c+2]) / 3.0;
+
+          const corners = [indices[f*3], indices[f*3+1], indices[f*3+2]];
+          for (let k of corners) {
+            const k3 = k * 3;
+            const proj = (v[k3]-cX)*fnX + (v[k3+1]-cY)*fnY + (v[k3+2]-cZ)*fnZ;
+            vGrads[k3] += proj * fnX;
+            vGrads[k3+1] += proj * fnY;
+            vGrads[k3+2] += proj * fnZ;
+            vCounts[k]++;
+          }
+        }
+        for (let i = 0; i < nVerts; i++) {
+          const cnt = vCounts[i] || 1.0;
+          v[i*3] -= stepSize * (vGrads[i*3] / cnt);
+          v[i*3+1] -= stepSize * (vGrads[i*3+1] / cnt);
+          v[i*3+2] -= stepSize * (vGrads[i*3+2] / cnt);
+        }
+      }
+      return v;
+    }
+
+    // =========================================================================
+    // HIF FULL HELPER FUNCTIONS (MATCHING PYTHON IMPLEMENTATION)
+    // =========================================================================
+    function computeVertexFields(v, indices, A, vertexFaces, faceNormals) {
+      const nVerts = v.length / 3;
+      const angleDiffs = new Float32Array(nVerts);
+      const gammas = new Float32Array(nVerts);
+      const targets = new Float32Array(nVerts * 3);
+
+      for (let vid = 0; vid < nVerts; vid++) {
+        const fList = vertexFaces[vid];
+        if (fList.length === 0) continue;
+
+        let maxAngle = 0;
+        for (let i = 0; i < fList.length; i++) {
+          for (let j = i + 1; j < fList.length; j++) {
+            const f1 = fList[i] * 3, f2 = fList[j] * 3;
+            const dot = faceNormals[f1] * faceNormals[f2] +
+                        faceNormals[f1 + 1] * faceNormals[f2 + 1] +
+                        faceNormals[f1 + 2] * faceNormals[f2 + 2];
+            const clampedDot = Math.max(-1.0, Math.min(1.0, dot));
+            const angleDeg = Math.acos(clampedDot) * (180 / Math.PI);
+            if (angleDeg > maxAngle) maxAngle = angleDeg;
+          }
+        }
+        angleDiffs[vid] = maxAngle;
+
+        const nbrs = A[vid];
+        if (nbrs.length > 0) {
+          let sumX = 0, sumY = 0, sumZ = 0;
+          for (let j of nbrs) {
+            sumX += v[j * 3];
+            sumY += v[j * 3 + 1];
+            sumZ += v[j * 3 + 2];
+          }
+          const tX = sumX / nbrs.length;
+          const tY = sumY / nbrs.length;
+          const tZ = sumZ / nbrs.length;
+
+          targets[vid * 3]     = tX;
+          targets[vid * 3 + 1] = tY;
+          targets[vid * 3 + 2] = tZ;
+
+          const dx = tX - v[vid * 3];
+          const dy = tY - v[vid * 3 + 1];
+          const dz = tZ - v[vid * 3 + 2];
+          gammas[vid] = Math.hypot(dx, dy, dz);
+        } else {
+          targets[vid * 3]     = v[vid * 3];
+          targets[vid * 3 + 1] = v[vid * 3 + 1];
+          targets[vid * 3 + 2] = v[vid * 3 + 2];
+          gammas[vid] = 0;
+        }
+      }
+
+      return { angleDiffs, gammas, targets };
+    }
+
+    function isLinearRidgeAdjacency(vid, A, angleDiffs, tol = 0.1) {
+      const nbrs = A[vid];
+      let highAngleCount = 0;
+      for (let j of nbrs) {
+        if (angleDiffs[j] > 30.0) {
+          highAngleCount++;
+        }
+      }
+      return highAngleCount > 2 || highAngleCount < 1;
+    }
+
+    // =========================================================================
+    // THE 12 SMOOTHING & NORMAL FILTERING ALGORITHMS
+    // =========================================================================
+    function laplacianSmoothing(v, A, rounds, lambdaParam = 0.5) {
+      let current = new Float32Array(v);
+      for (let r = 0; r < rounds; r++) {
+        let updated = new Float32Array(current);
+        for (let i = 0; i < current.length / 3; i++) {
+          const nbrs = A[i];
+          if (nbrs.length > 0) {
+            let avgX = 0, avgY = 0, avgZ = 0;
+            for (let j of nbrs) { avgX += current[j*3]; avgY += current[j*3+1]; avgZ += current[j*3+2]; }
+            avgX /= nbrs.length; avgY /= nbrs.length; avgZ /= nbrs.length;
+            updated[i*3] += lambdaParam * (avgX - current[i*3]);
+            updated[i*3+1] += lambdaParam * (avgY - current[i*3+1]);
+            updated[i*3+2] += lambdaParam * (avgZ - current[i*3+2]);
+          }
+        }
+        current = updated;
+      }
+      return current;
+    }
+
+    function taubinSmoothing(v, A, rounds, lambdaParam = 0.5, muParam = -0.53) {
+      let current = new Float32Array(v);
+      for (let r = 0; r < rounds; r++) {
+        let temp = new Float32Array(current);
+        for (let i = 0; i < current.length / 3; i++) {
+          const nbrs = A[i];
+          if (nbrs.length > 0) {
+            let avgX = 0, avgY = 0, avgZ = 0;
+            for (let j of nbrs) { avgX += current[j*3]; avgY += current[j*3+1]; avgZ += current[j*3+2]; }
+            avgX /= nbrs.length; avgY /= nbrs.length; avgZ /= nbrs.length;
+            temp[i*3] += lambdaParam * (avgX - current[i*3]);
+            temp[i*3+1] += lambdaParam * (avgY - current[i*3+1]);
+            temp[i*3+2] += lambdaParam * (avgZ - current[i*3+2]);
+          }
+        }
+        let updated = new Float32Array(temp);
+        for (let i = 0; i < temp.length / 3; i++) {
+          const nbrs = A[i];
+          if (nbrs.length > 0) {
+            let avgX = 0, avgY = 0, avgZ = 0;
+            for (let j of nbrs) { avgX += temp[j*3]; avgY += temp[j*3+1]; avgZ += temp[j*3+2]; }
+            avgX /= nbrs.length; avgY /= nbrs.length; avgZ /= nbrs.length;
+            updated[i*3] += muParam * (avgX - temp[i*3]);
+            updated[i*3+1] += muParam * (avgY - temp[i*3+1]);
+            updated[i*3+2] += muParam * (avgZ - temp[i*3+2]);
+          }
+        }
+        current = updated;
+      }
+      return current;
+    }
+
+    function bilateralMeshDenoising(v, indices, A, rounds, sigmaS = 1.0, sigmaR = 0.3) {
+      let current = new Float32Array(v);
+      for (let r = 0; r < rounds; r++) {
+        const normals = computeVertexNormals(current, indices);
+        let updated = new Float32Array(current);
+        for (let i = 0; i < current.length / 3; i++) {
+          const nbrs = A[i]; if (nbrs.length === 0) continue;
+          const viX = current[i*3], viY = current[i*3+1], viZ = current[i*3+2];
+          const niX = normals[i*3], niY = normals[i*3+1], niZ = normals[i*3+2];
+          let num = 0.0, den = 0.0;
+          for (let j of nbrs) {
+            const vjX = current[j*3], vjY = current[j*3+1], vjZ = current[j*3+2];
+            const dist2 = (viX-vjX)**2 + (viY-vjY)**2 + (viZ-vjZ)**2;
+            const ws = Math.exp(-dist2 / (2 * sigmaS**2));
+            const h_j = niX*(vjX-viX) + niY*(vjY-viY) + niZ*(vjZ-viZ);
+            const wr = Math.exp(-(h_j**2) / (2 * sigmaR**2));
+            const w = ws * wr; num += w * h_j; den += w;
+          }
+          if (den > 1e-12) {
+            const shift = num / den;
+            updated[i*3] += shift * niX; updated[i*3+1] += shift * niY; updated[i*3+2] += shift * niZ;
+          }
+        }
+        current = updated;
+      }
+      return current;
+    }
+
+    function meanCurvatureFlow(v, indices, A, rounds, stepSize = 0.085) {
+      let current = new Float32Array(v);
+      for (let r = 0; r < rounds; r++) {
+        const normals = computeVertexNormals(current, indices);
+        let updated = new Float32Array(current);
+        for (let i = 0; i < current.length / 3; i++) {
+          const nbrs = A[i]; if (nbrs.length === 0) continue;
+          let avgX = 0, avgY = 0, avgZ = 0;
+          for (let j of nbrs) { avgX += current[j*3]; avgY += current[j*3+1]; avgZ += current[j*3+2]; }
+          avgX /= nbrs.length; avgY /= nbrs.length; avgZ /= nbrs.length;
+          const lapX = avgX - current[i*3], lapY = avgY - current[i*3+1], lapZ = avgZ - current[i*3+2];
+          const dot = lapX*normals[i*3] + lapY*normals[i*3+1] + lapZ*normals[i*3+2];
+          updated[i*3] += stepSize * dot * normals[i*3];
+          updated[i*3+1] += stepSize * dot * normals[i*3+1];
+          updated[i*3+2] += stepSize * dot * normals[i*3+2];
+        }
+        current = updated;
+      }
+      return current;
+    }
+
+    function tangentialRelaxation(v, indices, A, rounds, stepSize = 0.085) {
+      let current = new Float32Array(v);
+      for (let r = 0; r < rounds; r++) {
+        const normals = computeVertexNormals(current, indices);
+        let updated = new Float32Array(current);
+        for (let i = 0; i < current.length / 3; i++) {
+          const nbrs = A[i]; if (nbrs.length < 3) continue;
+          let avgX = 0, avgY = 0, avgZ = 0;
+          for (let j of nbrs) { avgX += current[j*3]; avgY += current[j*3+1]; avgZ += current[j*3+2]; }
+          avgX /= nbrs.length; avgY /= nbrs.length; avgZ /= nbrs.length;
+          const deltaX = avgX - current[i*3], deltaY = avgY - current[i*3+1], deltaZ = avgZ - current[i*3+2];
+          const dot = deltaX*normals[i*3] + deltaY*normals[i*3+1] + deltaZ*normals[i*3+2];
+          updated[i*3] += stepSize * (deltaX - dot * normals[i*3]);
+          updated[i*3+1] += stepSize * (deltaY - dot * normals[i*3+1]);
+          updated[i*3+2] += stepSize * (deltaZ - dot * normals[i*3+2]);
+        }
+        current = updated;
+      }
+      return current;
+    }
+
+    function anisotropicFlow(v, indices, A, rounds, alpha = 0.85, beta = 0.15) {
+      let current = new Float32Array(v);
+      for (let r = 0; r < rounds; r++) {
+        const normals = computeVertexNormals(current, indices);
+        let updated = new Float32Array(current);
+        for (let i = 0; i < current.length / 3; i++) {
+          const nbrs = A[i]; if (nbrs.length < 3) continue;
+          let avgX = 0, avgY = 0, avgZ = 0;
+          for (let j of nbrs) { avgX += current[j*3]; avgY += current[j*3+1]; avgZ += current[j*3+2]; }
+          avgX /= nbrs.length; avgY /= nbrs.length; avgZ /= nbrs.length;
+          const deltaX = avgX - current[i*3], deltaY = avgY - current[i*3+1], deltaZ = avgZ - current[i*3+2];
+          const dot = deltaX*normals[i*3] + deltaY*normals[i*3+1] + deltaZ*normals[i*3+2];
+          const normX = dot * normals[i*3], normY = dot * normals[i*3+1], normZ = dot * normals[i*3+2];
+          updated[i*3] += alpha * (deltaX - normX) + beta * normX;
+          updated[i*3+1] += alpha * (deltaY - normY) + beta * normY;
+          updated[i*3+2] += alpha * (deltaZ - normZ) + beta * normZ;
+        }
+        current = updated;
+      }
+      return current;
+    }
+
+    function tangentPlaneSmoothing(v, A, rounds, stepSize = 0.085) {
+      let current = new Float32Array(v);
+      for (let r = 0; r < rounds; r++) {
+        let updated = new Float32Array(current);
+        for (let i = 0; i < current.length / 3; i++) {
+          const nbrs = A[i]; if (nbrs.length < 3) continue;
+          let avgX = 0, avgY = 0, avgZ = 0;
+          for (let j of nbrs) { avgX += current[j*3]; avgY += current[j*3+1]; avgZ += current[j*3+2]; }
+          avgX /= nbrs.length; avgY /= nbrs.length; avgZ /= nbrs.length;
+          updated[i*3] += stepSize * (avgX - current[i*3]);
+          updated[i*3+1] += stepSize * (avgY - current[i*3+1]);
+          updated[i*3+2] += stepSize * (avgZ - current[i*3+2]);
+        }
+        current = updated;
+      }
+      return current;
+    }
+
+    /**
+     * FULL HIF FLOW ALGORITHM (Python-Matching JavaScript Version)
+     */
+    function hifFlowFull(
+      v, indices, A, 
+      thetaSharpDeg = 45.0, 
+      sigmaD = 0.1, 
+      linearityTol = 0.1, 
+      rounds = 20, 
+      alpha = 0.85, 
+      beta = 0.15
+    ) {
+      const nVerts = v.length / 3;
+      let current = new Float32Array(v);
+
+      const vertexFaces = Array.from({ length: nVerts }, () => []);
+      const nFaces = indices.length / 3;
+      for (let fid = 0; fid < nFaces; fid++) {
+        const a = indices[fid * 3], b = indices[fid * 3 + 1], c = indices[fid * 3 + 2];
+        vertexFaces[a].push(fid);
+        vertexFaces[b].push(fid);
+        vertexFaces[c].push(fid);
+      }
+
+      for (let r = 0; r < rounds; r++) {
+        const { normals: faceNormals } = computeFaceProperties(current, indices);
+        const vertexNormals = computeVertexNormals(current, indices);
+
+        const { angleDiffs, gammas, targets } = computeVertexFields(
+          current, indices, A, vertexFaces, faceNormals
+        );
+
+        let updated = new Float32Array(current);
+
+        for (let vid = 0; vid < nVerts; vid++) {
+          if (vertexFaces[vid].length < 2) continue;
+
+          const angVal = angleDiffs[vid];
+          let gammaWeight = 1.0;
+          
+          const tX = targets[vid * 3];
+          const tY = targets[vid * 3 + 1];
+          const tZ = targets[vid * 3 + 2];
+
+          const delX = tX - current[vid * 3];
+          const delY = tY - current[vid * 3 + 1];
+          const delZ = tZ - current[vid * 3 + 2];
+
+          if (angVal > thetaSharpDeg) {
+            const isCorner = isLinearRidgeAdjacency(vid, A, angleDiffs, linearityTol);
+            if (isCorner) {
+              continue;
+            } else {
+              const gamma = gammas[vid];
+              gammaWeight = 1.0 - Math.exp(-gamma / sigmaD);
+            }
+          }
+
+          const vnX = vertexNormals[vid * 3];
+          const vnY = vertexNormals[vid * 3 + 1];
+          const vnZ = vertexNormals[vid * 3 + 2];
+
+          const dot = delX * vnX + delY * vnY + delZ * vnZ;
+
+          const normX = dot * vnX,      normY = dot * vnY,      normZ = dot * vnZ;
+          const tangX = delX - normX,  tangY = delY - normY,  tangZ = delZ - normZ;
+
+          const stepX = alpha * tangX + beta * normX * gammaWeight;
+          const stepY = alpha * tangY + beta * normY * gammaWeight;
+          const stepZ = alpha * tangZ + beta * normZ * gammaWeight;
+
+          updated[vid * 3]     += stepX;
+          updated[vid * 3 + 1] += stepY;
+          updated[vid * 3 + 2] += stepZ;
+        }
+
+        current = updated;
+      }
+
+      return current;
+    }
+
+    function sunTrimmedNormal(v, indices, numIter = 20, sigma = 0.3) {
+      const faceAdj = buildFaceAdjacency(indices);
+      let { normals: fn } = computeFaceProperties(v, indices);
+      const nFaces = indices.length / 3;
+
+      for (let iter = 0; iter < numIter; iter++) {
+        let newFn = new Float32Array(fn.length);
+        for (let i = 0; i < nFaces; i++) {
+          const niX = fn[i*3], niY = fn[i*3+1], niZ = fn[i*3+2];
+          let accX = 0, accY = 0, accZ = 0;
+          const nbrs = [i, ...faceAdj[i]];
+          for (let j of nbrs) {
+            const njX = fn[j*3], njY = fn[j*3+1], njZ = fn[j*3+2];
+            const nd = Math.hypot(niX-njX, niY-njY, niZ-njZ);
+            const w = nd < sigma ? (1.0 - (nd/sigma)**2)**2 : 0.0;
+            accX += w * njX; accY += w * njY; accZ += w * njZ;
+          }
+          const norm = Math.hypot(accX, accY, accZ);
+          if (norm > 1e-12) { newFn[i*3] = accX/norm; newFn[i*3+1] = accY/norm; newFn[i*3+2] = accZ/norm; }
+          else { newFn[i*3] = niX; newFn[i*3+1] = niY; newFn[i*3+2] = niZ; }
+        }
+        fn = newFn;
+      }
+      return updateVerticesFromNormals(v, indices, fn, numIter);
+    }
+
+    function guidedNormalFilter(v, indices, numIter = 20, sigmaS = 1.0, sigmaR = 0.2) {
+      const faceAdj = buildFaceAdjacency(indices);
+      let { centroids, normals: fn, areas } = computeFaceProperties(v, indices);
+      const nFaces = indices.length / 3;
+
+      for (let iter = 0; iter < numIter; iter++) {
+        let gn = new Float32Array(fn.length);
+        for (let i = 0; i < nFaces; i++) {
+          let accX = 0, accY = 0, accZ = 0;
+          for (let j of [i, ...faceAdj[i]]) {
+            accX += areas[j]*fn[j*3]; accY += areas[j]*fn[j*3+1]; accZ += areas[j]*fn[j*3+2];
+          }
+          const norm = Math.hypot(accX, accY, accZ);
+          if (norm > 1e-12) { gn[i*3] = accX/norm; gn[i*3+1] = accY/norm; gn[i*3+2] = accZ/norm; }
+          else { gn[i*3] = fn[i*3]; gn[i*3+1] = fn[i*3+1]; gn[i*3+2] = fn[i*3+2]; }
+        }
+
+        let newFn = new Float32Array(fn.length);
+        for (let i = 0; i < nFaces; i++) {
+          const ciX = centroids[i*3], ciY = centroids[i*3+1], ciZ = centroids[i*3+2];
+          const giX = gn[i*3], giY = gn[i*3+1], giZ = gn[i*3+2];
+          let accX = 0, accY = 0, accZ = 0;
+          for (let j of [i, ...faceAdj[i]]) {
+            const cjX = centroids[j*3], cjY = centroids[j*3+1], cjZ = centroids[j*3+2];
+            const gjX = gn[j*3], gjY = gn[j*3+1], gjZ = gn[j*3+2];
+            const ws = Math.exp(-((ciX-cjX)**2 + (ciY-cjY)**2 + (ciZ-cjZ)**2) / (2 * sigmaS**2));
+            const wr = Math.exp(-((giX-gjX)**2 + (giY-gjY)**2 + (giZ-gjZ)**2) / (2 * sigmaR**2));
+            const w = areas[j] * ws * wr;
+            accX += w * fn[j*3]; accY += w * fn[j*3+1]; accZ += w * fn[j*3+2];
+          }
+          const norm = Math.hypot(accX, accY, accZ);
+          if (norm > 1e-12) { newFn[i*3] = accX/norm; newFn[i*3+1] = accY/norm; newFn[i*3+2] = accZ/norm; }
+          else { newFn[i*3] = fn[i*3]; newFn[i*3+1] = fn[i*3+1]; newFn[i*3+2] = fn[i*3+2]; }
+        }
+        fn = newFn;
+      }
+      return updateVerticesFromNormals(v, indices, fn, numIter);
+    }
+
+    function l0SparseNormal(v, indices, beta = 2.0, maxBeta = 100.0, rate = 2.0) {
+      const faceAdj = buildFaceAdjacency(indices);
+      let { normals: N } = computeFaceProperties(v, indices);
+      const nFaces = indices.length / 3;
+
+      let edges = [];
+      for (let i = 0; i < nFaces; i++) {
+        for (let j of faceAdj[i]) {
+          if (i < j) edges.push([i, j]);
+        }
+      }
+
+      let currBeta = beta;
+      let stepCount = 0;
+      while (currBeta < maxBeta) {
+        let grad = new Float32Array(N.length);
+        for (let [i, j] of edges) {
+          const dx = N[i*3]-N[j*3], dy = N[i*3+1]-N[j*3+1], dz = N[i*3+2]-N[j*3+2];
+          if ((dx*dx + dy*dy + dz*dz) > (1.0 / currBeta)) {
+            grad[i*3] += dx; grad[i*3+1] += dy; grad[i*3+2] += dz;
+            grad[j*3] -= dx; grad[j*3+1] -= dy; grad[j*3+2] -= dz;
+          }
+        }
+        for (let i = 0; i < nFaces; i++) {
+          N[i*3] -= (0.1 / currBeta) * grad[i*3];
+          N[i*3+1] -= (0.1 / currBeta) * grad[i*3+1];
+          N[i*3+2] -= (0.1 / currBeta) * grad[i*3+2];
+          const len = Math.hypot(N[i*3], N[i*3+1], N[i*3+2]) || 1e-12;
+          N[i*3] /= len; N[i*3+1] /= len; N[i*3+2] /= len;
+        }
+        currBeta *= rate;
+        stepCount++;
+      }
+      return updateVerticesFromNormals(v, indices, N, Math.max(1, stepCount));
+    }
+
+    function medianNormalFiltering(v, indices, numIter = 20) {
+      const faceAdj = buildFaceAdjacency(indices);
+      let { normals: fn } = computeFaceProperties(v, indices);
+      const nFaces = indices.length / 3;
+
+      for (let iter = 0; iter < numIter; iter++) {
+        let newFn = new Float32Array(fn.length);
+        for (let i = 0; i < nFaces; i++) {
+          const nbrs = [i, ...faceAdj[i]];
+          let minAngleSum = Infinity;
+          let bestIdx = i;
+
+          for (let candidate of nbrs) {
+            let angleSum = 0;
+            const cX = fn[candidate*3], cY = fn[candidate*3+1], cZ = fn[candidate*3+2];
+            for (let other of nbrs) {
+              const oX = fn[other*3], oY = fn[other*3+1], oZ = fn[other*3+2];
+              const dot = Math.max(-1.0, Math.min(1.0, cX*oX + cY*oY + cZ*oZ));
+              angleSum += Math.acos(dot);
+            }
+            if (angleSum < minAngleSum) {
+              minAngleSum = angleSum;
+              bestIdx = candidate;
+            }
+          }
+          newFn[i*3] = fn[bestIdx*3];
+          newFn[i*3+1] = fn[bestIdx*3+1];
+          newFn[i*3+2] = fn[bestIdx*3+2];
+        }
+        fn = newFn;
+      }
+      return updateVerticesFromNormals(v, indices, fn, numIter);
+    }
+
+    // =========================================================================
+    // EVALUATION METRICS & RANKING COMPUTATION
+    // =========================================================================
+    function applyJetColormap(value) {
+      const v = Math.max(0, Math.min(1, value));
+      const r = Math.max(0, Math.min(1, 1.5 - Math.abs(v * 4 - 3)));
+      const g = Math.max(0, Math.min(1, 1.5 - Math.abs(v * 4 - 2)));
+      const b = Math.max(0, Math.min(1, 1.5 - Math.abs(v * 4 - 1)));
+      return [r, g, b];
+    }
+
+    function computeMetrics(origV, smoothedV) {
+      const n = origV.length / 3;
+      let sumSq = 0, sumDist = 0, maxDist = 0;
+      const dists = new Float32Array(n);
+
+      for (let i = 0; i < n; i++) {
+        const dx = origV[i*3] - smoothedV[i*3];
+        const dy = origV[i*3+1] - smoothedV[i*3+1];
+        const dz = origV[i*3+2] - smoothedV[i*3+2];
+        const d2 = dx*dx + dy*dy + dz*dz;
+        const d = Math.sqrt(d2);
+        dists[i] = d; sumSq += d2; sumDist += d;
+        if (d > maxDist) maxDist = d;
+      }
+
+      const sampleSize = Math.min(500, n);
+      let emdAcc = 0;
+      for (let i = 0; i < sampleSize; i++) {
+        emdAcc += dists[Math.floor(Math.random() * n)];
+      }
+
+      return {
+        rmse: Math.sqrt(sumSq / n),
+        chamfer: sumDist / n,
+        hausdorff: maxDist,
+        emd: emdAcc / sampleSize,
+        dists
+      };
+    }
+
+    function computeAndDisplayRankings(allResults) {
+      const metricsList = ['rmse', 'chamfer', 'hausdorff', 'emd'];
+      const rankMap = {};
+
+      allResults.forEach(r => {
+        rankMap[r.name] = { name: r.name, metricRanks: {}, avgRank: 0 };
+      });
+
+      metricsList.forEach(m => {
+        const sorted = [...allResults].sort((a, b) => a.metrics[m] - b.metrics[m]);
+        sorted.forEach((item, index) => {
+          rankMap[item.name].metricRanks[m] = index + 1;
+        });
+      });
+
+      const rankedList = Object.values(rankMap).map(item => {
+        const sum = Object.values(item.metricRanks).reduce((a, b) => a + b, 0);
+        item.avgRank = sum / metricsList.length;
+        return item;
+      });
+
+      rankedList.sort((a, b) => a.avgRank - b.avgRank);
+
+      const top3 = rankedList.slice(0, 3);
+      podiumContainer.innerHTML = `
+        <div class="podium-card gold">
+          <div class="podium-badge">🥇 1st Place</div>
+          <div class="podium-title">${top3[0] ? top3[0].name : '-'}</div>
+          <div class="podium-score">Avg Rank Score: ${top3[0] ? top3[0].avgRank.toFixed(2) : '-'}</div>
+        </div>
+        <div class="podium-card silver">
+          <div class="podium-badge">🥈 2nd Place</div>
+          <div class="podium-title">${top3[1] ? top3[1].name : '-'}</div>
+          <div class="podium-score">Avg Rank Score: ${top3[1] ? top3[1].avgRank.toFixed(2) : '-'}</div>
+        </div>
+        <div class="podium-card bronze">
+          <div class="podium-badge">🥉 3rd Place</div>
+          <div class="podium-title">${top3[2] ? top3[2].name : '-'}</div>
+          <div class="podium-score">Avg Rank Score: ${top3[2] ? top3[2].avgRank.toFixed(2) : '-'}</div>
+        </div>
+      `;
+
+      rankingsTableBody.innerHTML = '';
+      rankedList.forEach((item, index) => {
+        const rankNum = index + 1;
+        let badgeClass = 'rank-badge';
+        if (rankNum === 1) badgeClass += ' rank-1';
+        if (rankNum === 2) badgeClass += ' rank-2';
+        if (rankNum === 3) badgeClass += ' rank-3';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><span class="${badgeClass}">${rankNum}</span></td>
+          <td><strong>${item.name}</strong></td>
+          <td>${item.avgRank.toFixed(2)}</td>
+          <td>#${item.metricRanks.rmse}</td>
+          <td>#${item.metricRanks.chamfer}</td>
+          <td>#${item.metricRanks.hausdorff}</td>
+          <td>#${item.metricRanks.emd}</td>
+        `;
+        rankingsTableBody.appendChild(tr);
+      });
+    }
+
+    // =========================================================================
+    // EXECUTION BENCHMARK DISPATCHER
+    // =========================================================================
+    runBtn.addEventListener('click', async () => {
+      if (!gtGeometry || !noisyGeometry) {
+        alert('Please upload both Ground Truth and Noisy files before executing.');
+        return;
+      }
+
+      runBtn.disabled = true;
+      statusDiv.textContent = 'Running benchmark algorithms... Please wait...';
+
+      const rounds = parseInt(roundsSlider.value, 10);
+      const thetaSharp = parseFloat(hifThetaInput.value) || 45.0;
+      const sigmaD = parseFloat(hifSigmaInput.value) || 0.1;
+
+      const gtV = gtGeometry.attributes.position.array;
+      const noisyV = noisyGeometry.attributes.position.array;
+
+      let indices = noisyGeometry.index ? Array.from(noisyGeometry.index.array) : [];
+      if (indices.length === 0) indices = Array.from({ length: noisyV.length / 3 }, (_, i) => i);
+
+      const adj = buildVertexAdjacency(noisyV.length / 3, indices);
+
+      const methodRegistry = [
+        { name: "1. Laplacian", func: (v) => laplacianSmoothing(v, adj, rounds) },
+        { name: "2. Taubin", func: (v) => taubinSmoothing(v, adj, rounds) },
+        { name: "3. Bilateral", func: (v) => bilateralMeshDenoising(v, indices, adj, rounds) },
+        { name: "4. MCF", func: (v) => meanCurvatureFlow(v, indices, adj, rounds) },
+        { name: "5. Tangential", func: (v) => tangentialRelaxation(v, indices, adj, rounds) },
+        { name: "6. Anisotropic", func: (v) => anisotropicFlow(v, indices, adj, rounds) },
+        { name: "7. TPS", func: (v) => tangentPlaneSmoothing(v, adj, rounds) },
+        { name: "8. HIF (Proposed)", func: (v) => hifFlowFull(v, indices, adj, thetaSharp, sigmaD, 0.1, rounds, 0.85, 0.15) },
+        { name: "9. Sun Trimmed", func: (v) => sunTrimmedNormal(v, indices, rounds) },
+        { name: "10. Guided Normal", func: (v) => guidedNormalFilter(v, indices, rounds) },
+        { name: "11. L0 Sparse", func: (v) => l0SparseNormal(v, indices) },
+        { name: "12. Median Normal", func: (v) => medianNormalFiltering(v, indices, rounds) }
+      ];
+
+      metricsTableBody.innerHTML = '';
+      viewportsGrid.innerHTML = '';
+      const allResults = [];
+
+      for (let mIdx = 0; mIdx < methodRegistry.length; mIdx++) {
+        const item = methodRegistry[mIdx];
+        statusDiv.textContent = `Executing [${mIdx + 1}/12]: ${item.name}...`;
+        await new Promise(r => setTimeout(r, 20));
+
+        const smoothedV = item.func(noisyV);
+        const metrics = computeMetrics(gtV, smoothedV);
+        allResults.push({ name: item.name, metrics });
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${item.name}</strong></td>
+          <td>${metrics.rmse.toFixed(6)}</td>
+          <td>${metrics.chamfer.toFixed(6)}</td>
+          <td>${metrics.hausdorff.toFixed(6)}</td>
+          <td>${metrics.emd.toFixed(6)}</td>
+        `;
+        metricsTableBody.appendChild(tr);
+
+        const card = document.createElement('div');
+        card.className = 'viewport-card';
+        const cardId = `canvas-container-${mIdx}`;
+        card.innerHTML = `
+          <div class="viewport-title">${item.name}</div>
+          <div class="canvas-container" id="${cardId}"></div>
+          <div class="view-toggle">
+            <button class="active" id="btn-mesh-${mIdx}">Final Mesh</button>
+            <button id="btn-color-${mIdx}">Error Map (PLY)</button>
+          </div>
+        `;
+        viewportsGrid.appendChild(card);
+
+        setupViewport(cardId, mIdx, smoothedV, indices, metrics.dists);
+      }
+
+      computeAndDisplayRankings(allResults);
+
+      statusDiv.textContent = 'Benchmark completed successfully!';
+      runBtn.disabled = false;
+    });
+
+    // =========================================================================
+    // THREE.JS VIEWPORT RENDERER
+    // =========================================================================
+    function setupViewport(containerId, index, smoothedV, indices, dists) {
+      const container = document.getElementById(containerId);
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x121214);
+
+      const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      container.appendChild(renderer.domElement);
+
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+
+      const meshGeom = new THREE.BufferGeometry();
+      meshGeom.setAttribute('position', new THREE.Float32BufferAttribute(smoothedV, 3));
+      meshGeom.setIndex(indices);
+      meshGeom.computeVertexNormals();
+      meshGeom.center();
+
+      const meshMat = new THREE.MeshPhongMaterial({ color: 0x90a4ae, shininess: 30 });
+      const meshObj = new THREE.Mesh(meshGeom, meshMat);
+      scene.add(meshObj);
+
+      const colorGeom = meshGeom.clone();
+      const nVerts = smoothedV.length / 3;
+      const colors = new Float32Array(nVerts * 3);
+
+      let maxD = 0;
+      for (let i = 0; i < nVerts; i++) if (dists[i] > maxD) maxD = dists[i];
+      if (maxD === 0) maxD = 1e-5;
+
+      for (let i = 0; i < nVerts; i++) {
+        const [r, g, b] = applyJetColormap(dists[i] / maxD);
+        colors[i*3] = r; colors[i*3+1] = g; colors[i*3+2] = b;
+      }
+      colorGeom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      const colorMat = new THREE.MeshBasicMaterial({ vertexColors: true });
+      const colorObj = new THREE.Mesh(colorGeom, colorMat);
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      dirLight.position.set(1, 1, 1).normalize();
+      scene.add(dirLight);
+
+      camera.position.set(0, 0, 3);
+
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      const btnMesh = document.getElementById(`btn-mesh-${index}`);
+      const btnColor = document.getElementById(`btn-color-${index}`);
+
+      btnMesh.addEventListener('click', () => {
+        scene.remove(colorObj); scene.add(meshObj);
+        btnMesh.classList.add('active'); btnColor.classList.remove('active');
+      });
+
+      btnColor.addEventListener('click', () => {
+        scene.remove(meshObj); scene.add(colorObj);
+        btnColor.classList.add('active'); btnMesh.classList.remove('active');
+      });
+    }
+  </script>
+</body>
+</html>
