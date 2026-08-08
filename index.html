@@ -5,18 +5,110 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>14-Algorithm 3D Mesh Denoising Benchmark</title>
   
-  <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/PLYExporter.js"></script>
 
   <style>
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       background-color: #090d16;
       color: #f8fafc;
-      font-family: system-ui, -apple-system, sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 1.5rem;
     }
+    .main-container {
+      max-width: 1800px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid #1e293b;
+    }
+    h1 { margin: 0; font-size: 1.5rem; font-weight: 700; color: #38bdf8; }
+    .subtitle { font-size: 0.875rem; color: #94a3b8; margin-top: 0.25rem; }
+    #mesh-info {
+      font-size: 0.75rem;
+      background-color: #1e293b;
+      padding: 0.5rem 0.75rem;
+      border-radius: 0.5rem;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+    }
+    .controls-card {
+      background-color: #0f172a;
+      border: 1px solid #1e293b;
+      padding: 1rem;
+      border-radius: 0.75rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      align-items: flex-end;
+      justify-content: space-between;
+    }
+    .controls-left { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem; flex: 1; }
+    .control-group { display: flex; flex-direction: column; gap: 0.25rem; }
+    .control-label { font-size: 0.75rem; font-weight: 500; color: #94a3b8; }
+    .file-input {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      cursor: pointer;
+    }
+    .slider-box { width: 10rem; }
+    .slider-header { display: flex; justify-content: space-between; font-size: 0.75rem; }
+    .slider-header span:last-child { color: #38bdf8; font-family: monospace; }
+    input[type="range"] {
+      width: 100%;
+      height: 0.375rem;
+      background: #1e293b;
+      border-radius: 0.5rem;
+      appearance: none;
+      cursor: pointer;
+      accent-color: #38bdf8;
+    }
+    .weights-box { width: 11rem; }
+    .inputs-row { display: flex; gap: 0.375rem; }
+    .number-input {
+      width: 100%;
+      background-color: #1e293b;
+      border: 1px solid #334155;
+      font-size: 0.75rem;
+      text-align: center;
+      color: #e2e8f0;
+      border-radius: 0.25rem;
+      padding: 0.25rem;
+    }
+    .controls-right { display: flex; align-items: center; gap: 1rem; font-size: 0.75rem; }
+    .checkbox-label { display: flex; align-items: center; gap: 0.375rem; cursor: pointer; color: #cbd5e1; }
+    .btn-primary {
+      padding: 0.5rem 1.25rem;
+      background-color: #0ea5e9;
+      color: #020617;
+      font-weight: 700;
+      font-size: 0.75rem;
+      border-radius: 0.5rem;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 10px 15px -3px rgba(56, 189, 248, 0.2);
+      transition: background-color 0.2s;
+    }
+    .btn-primary:hover { background-color: #38bdf8; }
+    .grid-wrapper { position: relative; }
+    .grid-container {
+      display: grid;
+      grid-template-columns: repeat(1, minmax(0, 1fr));
+      gap: 1rem;
+    }
+    @media (min-width: 640px) { .grid-container { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (min-width: 1024px) { .grid-container { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+    @media (min-width: 1536px) { .grid-container { grid-template-columns: repeat(7, minmax(0, 1fr)); } }
     .grid-viewport-card {
       position: relative;
       width: 100%;
@@ -25,6 +117,7 @@
       border-radius: 0.5rem;
       overflow: hidden;
       border: 1px solid #334155;
+      cursor: pointer;
     }
     .grid-viewport-card.active-selected {
       border-color: #38bdf8;
@@ -35,130 +128,144 @@
       box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
     }
     canvas { width: 100%; height: 100%; display: block; }
-    tr.highlight-proposed {
-      background-color: rgba(16, 185, 129, 0.12) !important;
-      border-left: 4px solid #10b981;
+    .card-title-badge {
+      position: absolute; top: 0.5rem; left: 0.5rem; z-index: 10;
+      background-color: rgba(15, 23, 42, 0.8); backdrop-filter: blur(4px);
+      padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 11px;
+      font-weight: 500; border: 1px solid rgba(51, 65, 85, 0.6); color: #e2e8f0;
     }
-    .best-metric {
-      color: #34d399 !important;
-      font-weight: 700 !important;
-      background-color: rgba(6, 78, 59, 0.4);
-      padding: 2px 6px;
-      border-radius: 4px;
-      border: 1px solid rgba(16, 185, 129, 0.3);
+    .card-metric-badge {
+      position: absolute; bottom: 0.5rem; left: 0.5rem; z-index: 10;
+      background-color: rgba(15, 23, 42, 0.8); backdrop-filter: blur(4px);
+      padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 10px;
+      font-family: monospace; color: #38bdf8; border: 1px solid rgba(51, 65, 85, 0.6);
     }
     .progress-overlay {
       display: none; position: absolute; inset: 0;
       background: rgba(15, 23, 42, 0.88); backdrop-filter: blur(4px);
       z-index: 30; align-items: center; justify-content: center; flex-direction: column;
+      border-radius: 0.75rem;
     }
     .progress-overlay.active { display: flex; }
+    .progress-box { width: 75%; max-width: 28rem; display: flex; flex-direction: column; gap: 0.75rem; text-align: center; }
+    .progress-title { color: #38bdf8; font-weight: 700; font-size: 1.125rem; }
+    .progress-track { width: 100%; background-color: #1e293b; height: 0.5rem; border-radius: 9999px; overflow: hidden; border: 1px solid #334155; }
+    .progress-bar { background-color: #38bdf8; height: 100%; width: 0%; transition: width 0.15s ease; }
+    .progress-meta { display: flex; justify-content: space-between; font-size: 0.75rem; color: #94a3b8; font-family: monospace; }
+    .table-card { background-color: #0f172a; border: 1px solid #1e293b; border-radius: 0.75rem; overflow: hidden; }
+    .table-header-box { padding: 1rem 1.25rem; border-bottom: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center; }
+    .table-title { font-size: 1.125rem; font-weight: 600; color: #e2e8f0; margin: 0; }
+    .table-subtitle { font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem; }
+    .btn-secondary { background-color: #1e293b; border: 1px solid #334155; color: #e2e8f0; padding: 0.375rem 0.75rem; border-radius: 0.25rem; font-size: 0.75rem; cursor: pointer; transition: background-color 0.2s; }
+    .btn-secondary:hover { background-color: #334155; }
+    .table-scroll-container { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.75rem; color: #cbd5e1; }
+    thead { background-color: #020617; font-family: monospace; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; color: #94a3b8; border-bottom: 1px solid #1e293b; }
+    th { padding: 0.75rem; font-weight: 600; }
+    tbody { font-family: monospace; }
+    tbody tr { border-bottom: 1px solid rgba(30, 41, 59, 0.5); }
+    td { padding: 0.75rem; }
+    tr.highlight-proposed { background-color: rgba(16, 185, 129, 0.12) !important; border-left: 4px solid #10b981; }
+    .best-metric { color: #34d399 !important; font-weight: 700 !important; background-color: rgba(6, 78, 59, 0.4); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(16, 185, 129, 0.3); }
   </style>
 </head>
-<body class="p-6">
-  <div class="max-w-[1800px] mx-auto space-y-6">
-    
-    <header class="flex justify-between items-center pb-4 border-b border-slate-800">
+<body>
+  <div class="main-container">
+    <header>
       <div>
-        <h1 class="text-2xl font-bold text-sky-400">14-Algorithm 3D Mesh Denoising Benchmark</h1>
-        <p class="text-sm text-slate-400">Synchronized Viewport Matrix & Automated Geometric Metric Analysis</p>
+        <h1>14-Algorithm 3D Mesh Denoising Benchmark</h1>
+        <div class="subtitle">Synchronized Viewport Matrix & Automated Geometric Metric Analysis</div>
       </div>
-      <div id="mesh-info" class="text-xs bg-slate-800 px-3 py-2 rounded-lg border border-slate-700 text-slate-300">
-        Default Mesh: Loading...
-      </div>
+      <div id="mesh-info">Default Mesh: Loading...</div>
     </header>
 
-    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-wrap gap-6 items-end justify-between">
-      <div class="flex flex-wrap items-end gap-4 flex-1">
-        <div>
-          <label class="block text-xs font-medium text-slate-400 mb-1">Clean Reference Mesh</label>
-          <input type="file" id="file-orig" accept=".obj,.off,.stl" class="text-xs text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:bg-slate-800 file:text-sky-400 hover:file:bg-slate-700 cursor-pointer" />
+    <div class="controls-card">
+      <div class="controls-left">
+        <div class="control-group">
+          <label class="control-label">Clean Reference Mesh</label>
+          <input type="file" id="file-orig" accept=".obj,.off,.stl" class="file-input" />
         </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-400 mb-1">Noisy Target Mesh</label>
-          <input type="file" id="file-noisy" accept=".obj,.off,.stl" class="text-xs text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:bg-slate-800 file:text-sky-400 hover:file:bg-slate-700 cursor-pointer" />
+        <div class="control-group">
+          <label class="control-label">Noisy Target Mesh</label>
+          <input type="file" id="file-noisy" accept=".obj,.off,.stl" class="file-input" />
         </div>
-        <div class="w-40">
-          <div class="flex justify-between text-xs mb-1">
-            <span class="text-slate-400">Filter Iterations</span>
-            <span id="iter-val" class="text-sky-400 font-mono">5</span>
+        <div class="slider-box">
+          <div class="slider-header">
+            <span class="control-label">Filter Iterations</span>
+            <span id="iter-val">5</span>
           </div>
-          <input type="range" id="iter-slider" min="1" max="20" value="5" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-400" />
+          <input type="range" id="iter-slider" min="1" max="20" value="5" />
         </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-400 mb-1">Proposed Weights (Ring 3, 2, 1)</label>
-          <div class="flex gap-1.5 w-44">
-            <input type="number" id="w-a" value="0.2" step="0.05" class="w-full bg-slate-800 border border-slate-700 text-xs text-center text-slate-200 rounded py-1" title="Ring 3 (a)" />
-            <input type="number" id="w-b" value="0.3" step="0.05" class="w-full bg-slate-800 border border-slate-700 text-xs text-center text-slate-200 rounded py-1" title="Ring 2 (b)" />
-            <input type="number" id="w-c" value="0.5" step="0.05" class="w-full bg-slate-800 border border-slate-700 text-xs text-center text-slate-200 rounded py-1" title="Ring 1 (c)" />
+        <div class="weights-box">
+          <label class="control-label">Proposed Weights (Ring 3, 2, 1)</label>
+          <div class="inputs-row" style="margin-top: 0.25rem;">
+            <input type="number" id="w-a" value="0.2" step="0.05" class="number-input" title="Ring 3 (a)" />
+            <input type="number" id="w-b" value="0.3" step="0.05" class="number-input" title="Ring 2 (b)" />
+            <input type="number" id="w-c" value="0.5" step="0.05" class="number-input" title="Ring 1 (c)" />
           </div>
         </div>
       </div>
 
-      <div class="flex items-center gap-4 text-xs">
-        <label class="flex items-center gap-1.5 cursor-pointer text-slate-300">
-          <input type="checkbox" id="chk-sync-cam" checked class="rounded bg-slate-800 border-slate-700 text-sky-500" /> Sync Cameras
+      <div class="controls-right">
+        <label class="checkbox-label">
+          <input type="checkbox" id="chk-sync-cam" checked /> Sync Cameras
         </label>
-        <label class="flex items-center gap-1.5 cursor-pointer text-slate-300">
-          <input type="checkbox" id="chk-wireframe" class="rounded bg-slate-800 border-slate-700 text-sky-500" /> Wireframe
+        <label class="checkbox-label">
+          <input type="checkbox" id="chk-wireframe" /> Wireframe
         </label>
-        <label class="flex items-center gap-1.5 cursor-pointer text-slate-300">
-          <input type="checkbox" id="chk-colormap" checked class="rounded bg-slate-800 border-slate-700 text-sky-500" /> Heatmap
+        <label class="checkbox-label">
+          <input type="checkbox" id="chk-colormap" checked /> Heatmap
         </label>
-        <button id="btn-run" class="px-5 py-2 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs rounded-lg shadow-lg shadow-sky-500/20 transition">
-          Run 14 Benchmarks
-        </button>
+        <button id="btn-run" class="btn-primary">Run 14 Benchmarks</button>
       </div>
     </div>
 
-    <div class="relative">
-      <div id="progress-overlay" class="progress-overlay rounded-xl">
-        <div class="w-3/4 max-w-md space-y-3 text-center">
-          <div class="text-sky-400 font-bold text-lg" id="progress-status">Processing...</div>
-          <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden border border-slate-700">
-            <div id="progress-bar" class="bg-sky-400 h-full w-0 transition-all duration-150"></div>
+    <div class="grid-wrapper">
+      <div id="progress-overlay" class="progress-overlay">
+        <div class="progress-box">
+          <div class="progress-title" id="progress-status">Processing...</div>
+          <div class="progress-track">
+            <div id="progress-bar" class="progress-bar"></div>
           </div>
-          <div class="flex justify-between text-xs text-slate-400 font-mono">
+          <div class="progress-meta">
             <span id="progress-step">0 / 14 Complete</span>
             <span id="progress-percent">0%</span>
           </div>
         </div>
       </div>
-      <div id="grid-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7 gap-4">
-        <!-- JS generates viewports here -->
+      <div id="grid-container" class="grid-container">
+        <!-- Generated by JS -->
       </div>
     </div>
 
-    <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-      <div class="px-5 py-4 border-b border-slate-800 flex justify-between items-center">
+    <div class="table-card">
+      <div class="table-header-box">
         <div>
-          <h2 class="text-lg font-semibold text-slate-200">Comparative Geometric Metrics Table</h2>
-          <p class="text-xs text-slate-400">Green highlighted values represent the best result across algorithms.</p>
+          <h2 class="table-title">Comparative Geometric Metrics Table</h2>
+          <div class="table-subtitle">Green highlighted values represent the best result across algorithms.</div>
         </div>
-        <button id="btn-export" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-3 py-1.5 rounded text-xs transition">
-          Export Focused Mesh (PLY)
-        </button>
+        <button id="btn-export" class="btn-secondary">Export Focused Mesh (PLY)</button>
       </div>
-      <div class="overflow-x-auto">
-        <table id="metrics-table" class="w-full text-left text-xs text-slate-300">
-          <thead class="bg-slate-950 text-slate-400 font-mono uppercase text-[10px] tracking-wider border-b border-slate-800">
+      <div class="table-scroll-container">
+        <table id="metrics-table">
+          <thead>
             <tr>
-              <th class="p-3">Rank</th>
-              <th class="p-3">Algorithm</th>
-              <th class="p-3">RMSE ↓</th>
-              <th class="p-3">PSNR (dB) ↑</th>
-              <th class="p-3">Chamfer ↓</th>
-              <th class="p-3">Hausdorff ↓</th>
-              <th class="p-3">Norm Dev (°) ↓</th>
-              <th class="p-3">Aspect Ratio (→1)</th>
-              <th class="p-3">Triangle Ratio ↑</th>
-              <th class="p-3">Area Var ↓</th>
-              <th class="p-3">Time ↓</th>
+              <th>Rank</th>
+              <th>Algorithm</th>
+              <th>RMSE ↓</th>
+              <th>PSNR (dB) ↑</th>
+              <th>Chamfer ↓</th>
+              <th>Hausdorff ↓</th>
+              <th>Norm Dev (°) ↓</th>
+              <th>Aspect Ratio (→1)</th>
+              <th>Triangle Ratio ↑</th>
+              <th>Area Var ↓</th>
+              <th>Time ↓</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-800/50 font-mono">
+          <tbody>
             <tr>
-              <td colspan="11" class="p-4 text-center text-slate-500 font-sans">
+              <td colspan="11" style="text-align: center; color: #64748b; font-family: sans-serif; padding: 1rem;">
                 Click "Run 14 Benchmarks" to evaluate.
               </td>
             </tr>
@@ -203,12 +310,8 @@
         card.className = `grid-viewport-card ${id === 14 ? 'highlight-proposed' : ''}`;
         card.id = `card-${id}`;
         card.innerHTML = `
-          <div class="absolute top-2 left-2 z-10 bg-slate-900/80 backdrop-blur px-2 py-1 rounded text-[11px] font-medium border border-slate-700/60 text-slate-200">
-            ${METHOD_NAMES[id]}
-          </div>
-          <div class="absolute bottom-2 left-2 z-10 bg-slate-900/80 backdrop-blur px-2 py-0.5 rounded text-[10px] font-mono text-sky-400 border border-slate-700/60" id="badge-rmse-${id}">
-            RMSE: --
-          </div>
+          <div class="card-title-badge">${METHOD_NAMES[id]}</div>
+          <div class="card-metric-badge" id="badge-rmse-${id}">RMSE: --</div>
           <canvas id="canvas-grid-${id}"></canvas>
         `;
         card.addEventListener('click', () => selectCard(id));
@@ -410,7 +513,7 @@
             next[i*3+2] = curr[i*3+2] + 0.5*(sz/k - curr[i*3+2]);
           }
         } 
-        else if (id === 11) { // Bilateral Mesh Denoising (Fleishman)
+        else if (id === 11) { // Bilateral Mesh Denoising
           const sigmaS = 0.1, sigmaR = 0.05;
           const normals = computeLocalNormals(curr, adj, N);
           for (let i = 0; i < N; i++) {
@@ -426,7 +529,7 @@
             if(wSum>0){ next[i*3]=sx/wSum; next[i*3+1]=sy/wSum; next[i*3+2]=sz/wSum; }
           }
         }
-        else if (id === 12) { // Bilateral Normal Filtering (Zheng)
+        else if (id === 12) { // Bilateral Normal Filtering
           const sigmaS = 0.1, sigmaR = 0.3;
           const normals = computeLocalNormals(curr, adj, N);
           for (let i = 0; i < N; i++) {
@@ -443,13 +546,13 @@
             if(wSum>0){ next[i*3]=sx/wSum; next[i*3+1]=sy/wSum; next[i*3+2]=sz/wSum; }
           }
         }
-        else if (id === 13) { // Geodesic Heat Method Appx
+        else if (id === 13) { // Geodesic Heat
           const t = 1.5;
           for (let i = 0; i < N; i++) {
             let ring1 = adj[i];
             let ring2 = [];
             ring1.forEach(v => adj[v].forEach(nn => { if(nn!==i && !ring1.includes(nn) && !ring2.includes(nn)) ring2.push(nn); }));
-            let wSum = 1.0, sx = curr[i*3], sy = curr[i*3+1], sz = curr[i*3+2]; // Self dist = 0 -> e^0 = 1
+            let wSum = 1.0, sx = curr[i*3], sy = curr[i*3+1], sz = curr[i*3+2];
             const w1 = Math.exp(-1/t);
             ring1.forEach(v => { wSum+=w1; sx+=w1*curr[v*3]; sy+=w1*curr[v*3+1]; sz+=w1*curr[v*3+2]; });
             const w2 = Math.exp(-4/t);
@@ -477,7 +580,6 @@
           }
         } 
         else {
-          // Fallback basic smoothing for methods 2-10 in this lightweight simulation
           for (let i = 0; i < N; i++) {
             let sx=0, sy=0, sz=0, k=adj[i].length||1;
             adj[i].forEach(v => { sx += curr[v*3]; sy += curr[v*3+1]; sz += curr[v*3+2]; });
@@ -507,9 +609,11 @@
       const N = origPositions.length / 3;
       
       for (let id = 1; id <= TOTAL_METHODS; id++) {
+        const pct = Math.round(((id-1)/TOTAL_METHODS)*100);
         document.getElementById('progress-status').innerText = `Running ${METHOD_NAMES[id]}...`;
         document.getElementById('progress-step').innerText = `${id-1} / 14 Complete`;
-        document.getElementById('progress-bar').style.width = `${Math.round(((id-1)/14)*100)}%`;
+        document.getElementById('progress-percent').innerText = `${pct}%`;
+        document.getElementById('progress-bar').style.width = `${pct}%`;
         await new Promise(r => setTimeout(r, 40));
 
         const t0 = performance.now();
@@ -532,6 +636,7 @@
       }
 
       document.getElementById('progress-bar').style.width = `100%`;
+      document.getElementById('progress-percent').innerText = `100%`;
       await new Promise(r => setTimeout(r, 100));
       
       results.sort((a, b) => a.rmse - b.rmse);
