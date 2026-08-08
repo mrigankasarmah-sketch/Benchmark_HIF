@@ -103,6 +103,7 @@
       transition: background 0.2s;
     }
     .btn:hover { background: #0369a1; }
+    .btn:disabled { background: #334155; opacity: 0.6; cursor: not-allowed; }
     .btn-secondary { background: #334155; margin-top: 6px; }
     .btn-secondary:hover { background: #475569; }
 
@@ -151,6 +152,67 @@
       margin: 6px 0;
     }
     .legend-labels { display: flex; justify-content: space-between; color: var(--text-dim); }
+
+    /* Progress Overlay Modal */
+    .progress-overlay {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(2, 6, 23, 0.85);
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    .progress-overlay.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+    .progress-box {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      padding: 24px;
+      border-radius: 12px;
+      width: 380px;
+      text-align: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    .progress-title {
+      font-weight: 600;
+      font-size: 1rem;
+      margin-bottom: 6px;
+      color: var(--accent);
+    }
+    .progress-status {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      margin-bottom: 16px;
+    }
+    .progress-bar-bg {
+      width: 100%;
+      height: 10px;
+      background: var(--bg);
+      border-radius: 5px;
+      overflow: hidden;
+      margin-bottom: 10px;
+      border: 1px solid var(--border);
+    }
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #0284c7, #38bdf8);
+      transition: width 0.2s ease;
+    }
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
   </style>
 </head>
 <body>
@@ -164,11 +226,11 @@
     <div class="sidebar">
       <div class="panel-block">
         <div class="panel-title">1. Input Meshes</div>
-        <label>Original (Clean) Mesh</label>
-        <input type="file" id="file-orig" accept=".obj,.off,.ply">
+        <label>Original (Clean) Mesh (.obj, .off, .stl)</label>
+        <input type="file" id="file-orig" accept=".obj,.off,.stl">
         
-        <label>Noisy Mesh</label>
-        <input type="file" id="file-noisy" accept=".obj,.off,.ply">
+        <label>Noisy Mesh (.obj, .off, .stl)</label>
+        <input type="file" id="file-noisy" accept=".obj,.off,.stl">
       </div>
 
       <div class="panel-block">
@@ -213,6 +275,21 @@
 
     <div class="main-view">
       <div class="viewport-container">
+        <!-- Progress Overlay Modal -->
+        <div class="progress-overlay" id="progress-overlay">
+          <div class="progress-box">
+            <div class="progress-title">Running Benchmark</div>
+            <div class="progress-status" id="progress-status">Initializing calculations...</div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" id="progress-bar"></div>
+            </div>
+            <div class="progress-meta">
+              <span id="progress-step">0 / 12 Methods</span>
+              <span id="progress-percent">0%</span>
+            </div>
+          </div>
+        </div>
+
         <canvas id="canvas3d"></canvas>
         <div class="color-legend" id="legend">
           <div>Displacement Error</div>
@@ -252,7 +329,7 @@
     let origPositions = null;
     let noisyPositions = null;
     let meshIndices = null;
-    let methodOutputs = {}; // Stores denoised positions for all 12 methods
+    let methodOutputs = {};
 
     const METHOD_NAMES = {
       1: "Laplacian",
@@ -319,7 +396,7 @@
       noisyPositions = new Float32Array(origPositions.length);
       meshIndices = geom.index.array;
 
-      for(let i=0; i<origPositions.length; i+=3) {
+      for(let i = 0; i < origPositions.length; i += 3) {
         let noise = (Math.random() - 0.5) * 0.08;
         noisyPositions[i] = origPositions[i] + noise;
         noisyPositions[i+1] = origPositions[i+1] + noise;
@@ -336,43 +413,152 @@
     function loadMeshFile(file, isOriginal) {
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = (evt) => {
-        const parsed = parseOBJorOFF(evt.target.result);
-        if (isOriginal) {
-          origPositions = parsed.positions;
-        } else {
-          noisyPositions = parsed.positions;
-          meshIndices = parsed.indices;
-        }
-        if (origPositions && noisyPositions) {
-          document.getElementById('mesh-info').innerText = `${file.name}: ${origPositions.length/3} Vertices`;
-          renderMesh(noisyPositions);
-        }
-      };
-      reader.readAsText(file);
+      const filename = file.name.toLowerCase();
+
+      if (filename.endsWith('.stl')) {
+        reader.readAsArrayBuffer(file);
+        reader.onload = (evt) => parseAndAssign(parseSTL(evt.target.result), file.name, isOriginal);
+      } else {
+        reader.readAsText(file);
+        reader.onload = (evt) => {
+          let parsed;
+          if (filename.endsWith('.off')) {
+            parsed = parseOFF(evt.target.result);
+          } else {
+            parsed = parseOBJ(evt.target.result);
+          }
+          parseAndAssign(parsed, file.name, isOriginal);
+        };
+      }
     }
 
-    function parseOBJorOFF(text) {
+    function parseAndAssign(parsed, fileName, isOriginal) {
+      if (!parsed || !parsed.positions || parsed.positions.length === 0) {
+        return alert("Failed to parse file. Please check file format.");
+      }
+      if (isOriginal) {
+        origPositions = parsed.positions;
+      } else {
+        noisyPositions = parsed.positions;
+        meshIndices = parsed.indices;
+      }
+      if (origPositions && noisyPositions) {
+        document.getElementById('mesh-info').innerText = `${fileName}: ${origPositions.length/3} Vertices, ${meshIndices.length/3} Faces`;
+        renderMesh(noisyPositions);
+      }
+    }
+
+    // --- Parser 1: Wavefront OBJ ---
+    function parseOBJ(text) {
       const lines = text.split('\n');
       const pos = [];
       const idx = [];
-      let isOFF = lines[0].trim().startsWith('OFF');
 
       for (let line of lines) {
         line = line.trim();
-        if (!line || line.startsWith('#') || line.startsWith('OFF')) continue;
+        if (!line || line.startsWith('#')) continue;
         const parts = line.split(/\s+/);
-        if (parts[0] === 'v' || (isOFF && parts.length === 3)) {
-          const shift = (parts[0] === 'v') ? 1 : 0;
-          pos.push(parseFloat(parts[shift]), parseFloat(parts[shift+1]), parseFloat(parts[shift+2]));
-        } else if (parts[0] === 'f' || (isOFF && parts.length >= 4 && !isNaN(parseInt(parts[0])))) {
-          const shift = (parts[0] === 'f') ? 1 : 1;
-          idx.push(parseInt(parts[shift].split('/')[0]) - (isOFF?0:1),
-                   parseInt(parts[shift+1].split('/')[0]) - (isOFF?0:1),
-                   parseInt(parts[shift+2].split('/')[0]) - (isOFF?0:1));
+        if (parts[0] === 'v') {
+          pos.push(parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3]));
+        } else if (parts[0] === 'f') {
+          idx.push(
+            parseInt(parts[1].split('/')[0]) - 1,
+            parseInt(parts[2].split('/')[0]) - 1,
+            parseInt(parts[3].split('/')[0]) - 1
+          );
         }
       }
       return { positions: new Float32Array(pos), indices: new Uint32Array(idx) };
+    }
+
+    // --- Parser 2: Object File Format (OFF) ---
+    function parseOFF(text) {
+      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0 && !l.startsWith('#'));
+      if (!lines[0].startsWith('OFF')) return null;
+
+      let headerLine = lines[0].slice(3).trim();
+      let lineIdx = 1;
+      if (headerLine.length === 0) {
+        headerLine = lines[1];
+        lineIdx = 2;
+      }
+
+      const counts = headerLine.split(/\s+/).map(Number);
+      const numVerts = counts[0];
+      const numFaces = counts[1];
+
+      const pos = new Float32Array(numVerts * 3);
+      for (let i = 0; i < numVerts; i++) {
+        const parts = lines[lineIdx++].split(/\s+/).map(Number);
+        pos[i*3] = parts[0];
+        pos[i*3+1] = parts[1];
+        pos[i*3+2] = parts[2];
+      }
+
+      const idx = new Uint32Array(numFaces * 3);
+      for (let i = 0; i < numFaces; i++) {
+        const parts = lines[lineIdx++].split(/\s+/).map(Number);
+        idx[i*3] = parts[1];
+        idx[i*3+1] = parts[2];
+        idx[i*3+2] = parts[3];
+      }
+
+      return { positions: pos, indices: idx };
+    }
+
+    // --- Parser 3: STL (ASCII & Binary) + Vertex Deduplication ---
+    function parseSTL(buffer) {
+      const dataView = new DataView(buffer);
+      const isBinary = dataView.getUint32(80, true) * 50 + 84 === buffer.byteLength;
+
+      const rawVertices = [];
+
+      if (isBinary) {
+        const numTriangles = dataView.getUint32(80, true);
+        for (let i = 0; i < numTriangles; i++) {
+          const offset = 84 + i * 50 + 12; // Skip normal vector
+          for (let v = 0; v < 3; v++) {
+            rawVertices.push(
+              dataView.getFloat32(offset + v * 12, true),
+              dataView.getFloat32(offset + v * 12 + 4, true),
+              dataView.getFloat32(offset + v * 12 + 8, true)
+            );
+          }
+        }
+      } else {
+        const text = new TextDecoder().decode(buffer);
+        const matches = text.match(/vertex\s+([-\d.eE+]+)\s+([-\d.eE+]+)\s+([-\d.eE+]+)/g);
+        if (matches) {
+          matches.forEach(m => {
+            const parts = m.trim().split(/\s+/);
+            rawVertices.push(parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3]));
+          });
+        }
+      }
+
+      // Deduplicate STL vertices to reconstruct topological adjacency
+      const vertexMap = new Map();
+      const uniquePositions = [];
+      const indices = [];
+
+      for (let i = 0; i < rawVertices.length; i += 3) {
+        const x = rawVertices[i], y = rawVertices[i+1], z = rawVertices[i+2];
+        const key = `${x.toFixed(5)},${y.toFixed(5)},${z.toFixed(5)}`;
+
+        if (!vertexMap.has(key)) {
+          const newIdx = uniquePositions.length / 3;
+          vertexMap.set(key, newIdx);
+          uniquePositions.push(x, y, z);
+          indices.push(newIdx);
+        } else {
+          indices.push(vertexMap.get(key));
+        }
+      }
+
+      return {
+        positions: new Float32Array(uniquePositions),
+        indices: new Uint32Array(indices)
+      };
     }
 
     function applyColorMapping(geometry, denoisedPos, origPos) {
@@ -431,7 +617,6 @@
       scene.add(meshObject);
     }
 
-    // --- Helper: Build Adjacency Table ---
     function buildAdjacency(N, indices) {
       const adj = Array.from({ length: N }, () => []);
       const setAdj = Array.from({ length: N }, () => new Set());
@@ -445,7 +630,6 @@
       return adj;
     }
 
-    // --- Implementations of ALL 12 Mesh Denoising Algorithms ---
     function runDenoisingMethod(id, pos, indices, rounds, params) {
       const N = pos.length / 3;
       const adj = buildAdjacency(N, indices);
@@ -465,7 +649,7 @@
             next[i*3+2] = curr[i*3+2] + lambda * (sz/k - curr[i*3+2]);
           }
         } 
-        else if (id === 2) { // 2. Taubin Anti-Shrink
+        else if (id === 2) { // 2. Taubin
           const lambda = 0.5, mu = -0.53;
           let step1 = new Float32Array(curr);
           for (let i = 0; i < N; i++) {
@@ -485,7 +669,7 @@
             next[i*3+2] = step1[i*3+2] + mu * (sz/k - step1[i*3+2]);
           }
         } 
-        else if (id === 3) { // 3. Bilateral Filter
+        else if (id === 3) { // 3. Bilateral
           const sigmaS = 0.1, sigmaR = 0.05;
           for (let i = 0; i < N; i++) {
             let wSum = 0, sx = 0, sy = 0, sz = 0;
@@ -501,7 +685,7 @@
             next[i*3+2] = sz / (wSum || 1);
           }
         } 
-        else if (id === 4) { // 4. Mean Curvature Flow (MCF)
+        else if (id === 4) { // 4. MCF
           const dt = 0.3;
           for (let i = 0; i < N; i++) {
             let sx=0, sy=0, sz=0;
@@ -513,13 +697,12 @@
             next[i*3+2] = curr[i*3+2] + dt * lapZ;
           }
         } 
-        else if (id === 5) { // 5. Tangential Smoothing
+        else if (id === 5) { // 5. Tangential
           for (let i = 0; i < N; i++) {
             let sx=0, sy=0, sz=0;
             adj[i].forEach(v => { sx += curr[v*3]; sy += curr[v*3+1]; sz += curr[v*3+2]; });
             let k = adj[i].length || 1;
             let dx = sx/k - curr[i*3], dy = sy/k - curr[i*3+1], dz = sz/k - curr[i*3+2];
-            // Normal estimate
             let nx = curr[i*3], ny = curr[i*3+1], nz = curr[i*3+2];
             let len = Math.sqrt(nx*nx + ny*ny + nz*nz) || 1;
             nx /= len; ny /= len; nz /= len;
@@ -543,7 +726,7 @@
             next[i*3+2] = sz / (wSum || 1);
           }
         } 
-        else if (id === 7) { // 7. TPS (Tangent Plane Smoothing)
+        else if (id === 7) { // 7. TPS
           for (let i = 0; i < N; i++) {
             let sx=0, sy=0, sz=0;
             adj[i].forEach(v => { sx += curr[v*3]; sy += curr[v*3+1]; sz += curr[v*3+2]; });
@@ -635,9 +818,20 @@
       return curr;
     }
 
-    // --- Benchmark Execution & Ranking Across ALL 12 Methods ---
-    document.getElementById('btn-run').addEventListener('click', () => {
+    // --- Asynchronous Benchmark Execution with Dynamic UI Progress Updates ---
+    document.getElementById('btn-run').addEventListener('click', async () => {
       if (!noisyPositions || !origPositions) return alert("Please upload both meshes first!");
+
+      const btn = document.getElementById('btn-run');
+      const overlay = document.getElementById('progress-overlay');
+      const pBar = document.getElementById('progress-bar');
+      const pStatus = document.getElementById('progress-status');
+      const pStep = document.getElementById('progress-step');
+      const pPercent = document.getElementById('progress-percent');
+
+      // Lock UI & Show Overlay
+      btn.disabled = true;
+      overlay.classList.add('active');
 
       const rounds = parseInt(iterSlider.value);
       const c = parseFloat(document.getElementById('w-c').value);
@@ -647,7 +841,21 @@
       const results = [];
       methodOutputs = {};
 
-      for (let id = 1; id <= 12; id++) {
+      const TOTAL_METHODS = 12;
+
+      for (let id = 1; id <= TOTAL_METHODS; id++) {
+        const methodName = METHOD_NAMES[id];
+        
+        // Update Progress UI
+        pStatus.innerText = `Processing Method ${id}/12: ${methodName}...`;
+        pStep.innerText = `${id - 1} / ${TOTAL_METHODS} Complete`;
+        const pct = Math.round(((id - 1) / TOTAL_METHODS) * 100);
+        pPercent.innerText = `${pct}%`;
+        pBar.style.width = `${pct}%`;
+
+        // Yield to DOM renderer to repaint the progress bar
+        await new Promise(resolve => setTimeout(resolve, 50));
+
         const t0 = performance.now();
         const denoised = runDenoisingMethod(id, noisyPositions, meshIndices, rounds, { a, b, c });
         const elapsedTime = ((performance.now() - t0) / 1000).toFixed(4);
@@ -674,16 +882,24 @@
 
         results.push({
           id,
-          name: METHOD_NAMES[id],
+          name: methodName,
           rmse,
           chamfer,
           hausdorff,
           avgAngleErr,
           time: parseFloat(elapsedTime),
           iters: rounds,
-          score: rmse + (avgAngleErr / 300) // Composite score for overall ranking
+          score: rmse + (avgAngleErr / 300)
         });
       }
+
+      // Finish Progress
+      pStatus.innerText = "Finalizing benchmark table...";
+      pStep.innerText = `12 / 12 Complete`;
+      pPercent.innerText = `100%`;
+      pBar.style.width = `100%`;
+
+      await new Promise(resolve => setTimeout(resolve, 200));
 
       // Sort by Composite Ranking
       results.sort((a, b) => a.score - b.score);
@@ -713,6 +929,10 @@
         `;
         tableBody.appendChild(tr);
       });
+
+      // Hide Overlay & Unlock UI
+      overlay.classList.remove('active');
+      btn.disabled = false;
     });
 
     // Handle Active Method Switch
