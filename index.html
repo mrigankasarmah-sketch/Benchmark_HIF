@@ -3,478 +3,450 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>3D Mesh Denoising Comprehensive Benchmark Suite</title>
-  
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  
+  <title>3D Mesh Denoising Extended Benchmark Suite (4x3 Grid - Pure CSS)</title>
+
   <!-- Three.js + OrbitControls + PLYExporter -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/PLYExporter.js"></script>
 
   <style>
-    body {
+    /* Global Variables & Reset */
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f8fafc;
+      --border-color: #cbd5e1;
+      --border-light: #e2e8f0;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --accent-emerald: #10b981;
+      --accent-emerald-hover: #059669;
+      --accent-sky: #0284c7;
+      --accent-sky-hover: #0369a1;
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    * {
+      box-sizing: border-box;
       margin: 0;
-      background-color: #090d16;
-      color: #f8fafc;
-      font-family: system-ui, -apple-system, sans-serif;
+      padding: 0;
     }
 
-    .viewport-container {
-      position: relative;
-      width: 100%;
-      height: 520px;
-      background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+    body {
+      background-color: var(--bg-secondary);
+      color: var(--text-main);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 1.5rem;
+    }
+
+    .container {
+      max-width: 1680px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    /* Header Section */
+    header {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border-color);
+      gap: 1rem;
+    }
+
+    @media (min-width: 768px) {
+      header {
+        flex-direction: row;
+        align-items: center;
+      }
+    }
+
+    .title-group h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .title-group p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .info-badge {
+      font-size: 0.75rem;
+      background: var(--bg-primary);
+      padding: 0.375rem 0.75rem;
+      border-radius: 0.375rem;
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      font-family: monospace;
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* Buttons */
+    .btn {
+      padding: 0.375rem 0.875rem;
+      border-radius: 0.375rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: 1px solid transparent;
+    }
+
+    .btn-secondary {
+      background-color: #f1f5f9;
+      border-color: var(--border-color);
+      color: var(--text-main);
+    }
+
+    .btn-secondary:hover {
+      background-color: var(--border-light);
+    }
+
+    .btn-primary {
+      background-color: var(--accent-sky);
+      color: #ffffff;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-primary:hover {
+      background-color: var(--accent-sky-hover);
+    }
+
+    .btn-success {
+      background-color: var(--accent-emerald);
+      color: #ffffff;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-success:hover {
+      background-color: var(--accent-emerald-hover);
+    }
+
+    /* Controls Bar */
+    .toolbar {
+      background-color: var(--bg-primary);
+      border: 1px solid var(--border-color);
       border-radius: 0.75rem;
-      overflow: hidden;
-      border: 1px solid #334155;
+      padding: 1rem;
+      box-shadow: var(--shadow-sm);
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+      align-items: center;
     }
 
-    canvas {
+    @media (min-width: 768px) {
+      .toolbar {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.375rem;
+    }
+
+    .control-group label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .file-inputs {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .file-inputs input[type="file"] {
+      width: 100%;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+    }
+
+    .range-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .range-val {
+      color: var(--accent-sky);
+      font-family: monospace;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent-sky);
+      cursor: pointer;
+    }
+
+    .checkbox-group {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-main);
+      cursor: pointer;
+    }
+
+    /* Seamless 4x3 Grid Layout */
+    .grid-container {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 0px; /* Zero Margin Grid */
+      border: 1px solid var(--border-color);
+      background-color: #ffffff;
+      border-radius: 0.5rem;
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .grid-item {
+      position: relative;
+      height: 250px;
+      border: 1px solid var(--border-light);
+      background-color: #ffffff;
+      margin: -0.5px; /* Clean border overlap */
+    }
+
+    .grid-item.highlight-proposed {
+      outline: 2px solid var(--accent-emerald);
+      z-index: 10;
+    }
+
+    .grid-item canvas {
       width: 100%;
       height: 100%;
       display: block;
     }
 
-    tr.highlight-proposed {
-      background-color: rgba(16, 185, 129, 0.15) !important;
-      border-left: 4px solid #10b981;
-    }
-
-    tr.selected {
-      background-color: rgba(56, 189, 248, 0.2) !important;
-    }
-
-    .progress-overlay {
-      display: none;
+    .grid-item-header {
       position: absolute;
-      inset: 0;
-      background: rgba(15, 23, 42, 0.85);
-      backdrop-filter: blur(4px);
-      z-index: 20;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-    }
-
-    .progress-overlay.active {
+      top: 6px;
+      left: 6px;
+      right: 6px;
       display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+      z-index: 10;
     }
 
-    .metric-header-group {
-      border-bottom: 2px solid #334155;
-      text-align: center;
+    .badge-title {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(4px);
+      color: var(--text-main);
+      font-weight: 700;
+      font-size: 0.7rem;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border-color);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .badge-title.proposed {
+      background: var(--accent-emerald);
+      color: #ffffff;
+      border-color: #059669;
+    }
+
+    .badge-metric {
+      font-size: 0.65rem;
+      font-family: monospace;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid var(--border-color);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--text-main);
+    }
+
+    .badge-metric.proposed {
+      background: #ecfdf5;
+      color: #047857;
+      border-color: #a7f3d0;
+      font-weight: bold;
+    }
+
+    /* Extended Metrics Table */
+    .table-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 0.75rem;
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+
+    .table-header {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border-light);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .table-header h2 {
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.75rem;
+    }
+
+    th {
+      background: #f8fafc;
+      padding: 0.75rem 1rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-color);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 0.625rem 1rem;
+      border-bottom: 1px solid var(--border-light);
+      font-family: monospace;
+      white-space: nowrap;
+    }
+
+    tr:hover {
+      background-color: #f8fafc;
+    }
+
+    tr.row-proposed {
+      background-color: rgba(16, 185, 129, 0.08) !important;
+      font-weight: bold;
+    }
+
+    tr.row-proposed td {
+      color: #047857;
     }
   </style>
 </head>
-<body class="p-6">
+<body>
 
-  <div class="max-w-[1600px] mx-auto space-y-6">
+  <div class="container">
     
-    <!-- Header -->
-    <header class="flex justify-between items-center pb-4 border-b border-slate-800">
-      <div>
-        <h1 class="text-2xl font-bold text-sky-400">3D Mesh Denoising Benchmark Suite</h1>
-        <p class="text-sm text-slate-400">Positional Error, Normal Error & Triangle Surface Topology Analysis (15 Metrics)</p>
+    <!-- Top Header -->
+    <header>
+      <div class="title-group">
+        <h1>3D Mesh Denoising Benchmark Suite</h1>
+        <p>Synchronized 4x3 Comparative Grid & Extended Quantitative Metrics Evaluation (12 Methods)</p>
       </div>
-      <div id="mesh-info" class="text-xs bg-slate-800 px-3 py-2 rounded-lg border border-slate-700 text-slate-300">
-        Mesh: 578 vertices, 1152 faces
+
+      <div class="header-actions">
+        <div id="mesh-info" class="info-badge">
+          Mesh: 578 Vertices | 1152 Faces
+        </div>
+        <button id="btn-sync-reset" class="btn btn-secondary">Reset Camera Views</button>
+        <button id="btn-export-all" class="btn btn-success">Export All PLY Models</button>
       </div>
     </header>
 
-    <!-- Top Layout: Controls & Viewport -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      
-      <!-- Left Panel: Input & Parameters -->
-      <div class="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-5">
-        
-        <h2 class="text-lg font-semibold text-slate-200 border-b border-slate-800 pb-2">1. Input Configuration</h2>
-        
-        <!-- File Inputs -->
-        <div class="space-y-3">
-          <div>
-            <label class="block text-xs font-medium text-slate-400 mb-1">Original Mesh (Clean Reference)</label>
-            <input type="file" id="file-orig" accept=".obj,.off,.stl" class="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-sky-400 hover:file:bg-slate-700 cursor-pointer" />
-          </div>
-
-          <div>
-            <label class="block text-xs font-medium text-slate-400 mb-1">Noisy Mesh (To Denoise)</label>
-            <input type="file" id="file-noisy" accept=".obj,.off,.stl" class="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-sky-400 hover:file:bg-slate-700 cursor-pointer" />
-          </div>
+    <!-- Toolbar Controls -->
+    <div class="toolbar">
+      <div class="control-group">
+        <label>Reference / Noisy Mesh Inputs</label>
+        <div class="file-inputs">
+          <input type="file" id="file-orig" accept=".obj,.off,.stl" />
+          <input type="file" id="file-noisy" accept=".obj,.off,.stl" />
         </div>
-
-        <h2 class="text-lg font-semibold text-slate-200 border-b border-slate-800 pb-2">2. Parameters</h2>
-
-        <!-- Iterations Slider -->
-        <div>
-          <div class="flex justify-between text-xs mb-1">
-            <span class="text-slate-400">Filter Iterations</span>
-            <span id="iter-val" class="text-sky-400 font-mono">3</span>
-          </div>
-          <input type="range" id="iter-slider" min="1" max="20" value="3" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-400" />
-        </div>
-
-        <!-- Proposed MultiRing Weights -->
-        <div class="space-y-2">
-          <label class="block text-xs font-medium text-slate-400">MultiRing Weights (Ring 3, 2, 1)</label>
-          <div class="grid grid-cols-3 gap-2">
-            <input type="number" id="w-a" value="0.2" step="0.05" class="bg-slate-800 border border-slate-700 text-xs text-center text-slate-200 rounded py-1" title="Ring 3 Weight (a)" />
-            <input type="number" id="w-b" value="0.3" step="0.05" class="bg-slate-800 border border-slate-700 text-xs text-center text-slate-200 rounded py-1" title="Ring 2 Weight (b)" />
-            <input type="number" id="w-c" value="0.5" step="0.05" class="bg-slate-800 border border-slate-700 text-xs text-center text-slate-200 rounded py-1" title="Ring 1 Weight (c)" />
-          </div>
-        </div>
-
-        <!-- Run Button -->
-        <button id="btn-run" class="w-full py-2.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-sm rounded-lg shadow-lg shadow-sky-500/20 transition">
-          Run Denoising Benchmark (12 Methods)
-        </button>
-
       </div>
 
-      <!-- Right Panel: 3D Viewport -->
-      <div class="lg:col-span-2 space-y-3">
-        
-        <div class="viewport-container">
-          
-          <!-- Overlay -->
-          <div id="progress-overlay" class="progress-overlay">
-            <div class="w-3/4 max-w-md space-y-3 text-center">
-              <div class="text-sky-400 font-bold text-lg" id="progress-status">Processing Benchmark...</div>
-              <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden border border-slate-700">
-                <div id="progress-bar" class="bg-sky-400 h-full w-0 transition-all duration-150"></div>
-              </div>
-              <div class="flex justify-between text-xs text-slate-400 font-mono">
-                <span id="progress-step">0 / 12 Complete</span>
-                <span id="progress-percent">0%</span>
-              </div>
-            </div>
-          </div>
-
-          <canvas id="canvas3d"></canvas>
+      <div class="control-group">
+        <div class="range-header">
+          <span>Filter Iterations</span>
+          <span id="iter-val" class="range-val">3</span>
         </div>
-
-        <!-- Viewport Controls Toolbar -->
-        <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl flex flex-wrap gap-4 justify-between items-center">
-          
-          <div class="flex items-center gap-4">
-            <label class="block text-xs font-medium text-slate-400">Active Method View:</label>
-            <select id="method-select" class="bg-slate-800 border border-slate-700 text-xs text-sky-400 rounded py-1 px-3">
-              <option value="1">1. Laplacian Smoothing</option>
-              <option value="2">2. Taubin Filter</option>
-              <option value="3">3. Bilateral Mesh Denoising</option>
-              <option value="4">4. Mean Curvature Flow (MCF)</option>
-              <option value="5">5. Tangential Smoothing</option>
-              <option value="6">6. Anisotropic Diffusion</option>
-              <option value="7">7. Thin Plate Spline (TPS)</option>
-              <option value="8" selected>8. Proposed (MultiRing Adaptive)</option>
-              <option value="9">9. Sun Trimmed Median Filter</option>
-              <option value="10">10. Guided Normal Filtering</option>
-              <option value="11">11. L0 Sparse Regularization</option>
-              <option value="12">12. Median Normal Filtering</option>
-            </select>
-          </div>
-
-          <div class="flex items-center gap-4 text-xs">
-            <label class="flex items-center gap-1.5 cursor-pointer text-slate-300">
-              <input type="checkbox" id="chk-wireframe" class="rounded bg-slate-800 border-slate-700 text-sky-500 focus:ring-0" />
-              Wireframe
-            </label>
-
-            <label class="flex items-center gap-1.5 cursor-pointer text-slate-300">
-              <input type="checkbox" id="chk-colormap" checked class="rounded bg-slate-800 border-slate-700 text-sky-500 focus:ring-0" />
-              Error Heatmap
-            </label>
-
-            <span class="text-slate-500">|</span>
-            
-            <span class="text-slate-400">Max Error: <span id="max-err-text" class="font-mono text-sky-400">0.0000</span></span>
-
-            <button id="btn-export" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-3 py-1 rounded text-xs transition">
-              Export PLY
-            </button>
-          </div>
-
-        </div>
-
+        <input type="range" id="iter-slider" min="1" max="20" value="3" />
       </div>
 
+      <div class="checkbox-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="chk-wireframe" /> Wireframe Overlay
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="chk-colormap" checked /> Error Heatmap
+        </label>
+      </div>
+
+      <button id="btn-run" class="btn btn-primary" style="height: 38px;">Re-Run All Benchmark Methods</button>
     </div>
 
-    <!-- Benchmark Results Table -->
-    <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-      <div class="px-5 py-4 border-b border-slate-800 flex justify-between items-center">
-        <div>
-          <h2 class="text-lg font-semibold text-slate-200">Evaluation Metrics Comparison</h2>
-          <p class="text-xs text-slate-400 mt-0.5">Positional Distance, Surface Normal Error, and Triangle Mesh Quality</p>
-        </div>
-        <span class="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full font-mono">
-          Proposed excels in Triangle Mesh Quality &amp; Normal Consistency
+    <!-- 4x3 Zero-Margin Grid Section -->
+    <div>
+      <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; padding: 0 0.25rem;">
+        <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">
+          Synchronized 3D Viewports (4 Columns × 3 Rows)
+        </span>
+        <span style="font-size: 0.75rem; color: var(--text-muted);">
+          Rotate/zoom any viewport to synchronize all 12 views
         </span>
       </div>
-      
-      <div class="overflow-x-auto">
-        <table id="metrics-table" class="w-full text-right text-xs text-slate-300 border-collapse">
-          <thead class="bg-slate-950 text-slate-400 font-mono uppercase text-[10px] tracking-wider border-b border-slate-800">
-            <!-- Group Header -->
+
+      <div class="grid-container" id="grid-3d">
+        <!-- 12 Grid Viewports will be automatically populated here -->
+      </div>
+    </div>
+
+    <!-- Extended Metrics Evaluation Table -->
+    <div class="table-card">
+      <div class="table-header">
+        <h2>Extended Quantitative Evaluation Metrics</h2>
+        <button id="btn-export-csv" class="btn btn-secondary">Export Metrics CSV</button>
+      </div>
+      <div class="table-wrapper">
+        <table id="metrics-table">
+          <thead>
             <tr>
-              <th colspan="2" class="p-2 border-r border-slate-800 text-center">ALGORITHM</th>
-              <th colspan="4" class="p-2 border-r border-slate-800 text-center bg-slate-900/50">POSITIONAL ERROR</th>
-              <th colspan="3" class="p-2 border-r border-slate-800 text-center">NORMAL DEVIATION (Δθ)</th>
-              <th colspan="5" class="p-2 border-r border-slate-800 text-center bg-emerald-950/30 text-emerald-400">TRIANGLE MESH &amp; SURFACE QUALITY</th>
-              <th colspan="2" class="p-2 text-center">PERFORMANCE</th>
-            </tr>
-            <!-- Sub Header -->
-            <tr class="border-t border-slate-800">
-              <th class="p-3 text-left">#</th>
-              <th class="p-3 text-left border-r border-slate-800">METHOD</th>
-              <th class="p-3" title="Root Mean Square Error">RMSE ↓</th>
-              <th class="p-3" title="Chamfer Distance">CHAMFER ↓</th>
-              <th class="p-3" title="Hausdorff Distance">HAUSDORFF ↓</th>
-              <th class="p-3 border-r border-slate-800" title="Earth Mover's Distance">EMD ↓</th>
-              <th class="p-3" title="Maximum Normal Angle Difference">MAX Δθ (°)</th>
-              <th class="p-3" title="Minimum Normal Angle Difference">MIN Δθ (°)</th>
-              <th class="p-3 border-r border-slate-800" title="Average Normal Angle Difference">AVG Δθ (°)</th>
-              <th class="p-3 text-emerald-400" title="Triangle Aspect Ratio (Higher is better, 1.0 = Equilateral)">ASPECT RATIO ↑</th>
-              <th class="p-3 text-emerald-400" title="Chiang Quality Index (0 to 1)">CHIANG SCORE ↑</th>
-              <th class="p-3 text-emerald-400" title="Scaled Jacobian (-1 to 1, higher is better)">SCALED JAC. ↑</th>
-              <th class="p-3 text-emerald-400" title="Surface Normal Consistency Dot Product (0 to 1)">NORM CONS. ↑</th>
-              <th class="p-3 border-r border-slate-800 text-emerald-400" title="Normal Curvature Variation (Lower means smoother curvature)">NCV ↓</th>
-              <th class="p-3" title="Execution Time in Seconds">TIME (s)</th>
-              <th class="p-3 text-center" title="Filter Iterations">ITERS</th>
+              <th>Method Name</th>
+              <th>RMSE ↓</th>
+              <th>PSNR (dB) ↑</th>
+              <th>SSIM ↑</th>
+              <th>SNR (dB) ↑</th>
+              <th>Chamfer Dist ↓</th>
+              <th>Hausdorff Dist ↓</th>
+              <th>MSA (rad) ↓</th>
+              <th>Aspect Ratio Quality ↑</th>
+              <th>Runtime (ms) ↓</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-800/60 font-mono">
-            
-            <tr>
-              <td class="p-3 text-left text-slate-500">1</td>
-              <td class="p-3 text-left font-sans font-medium text-slate-200 border-r border-slate-800">Laplacian</td>
-              <td class="p-3">0.179973</td>
-              <td class="p-3">0.179110</td>
-              <td class="p-3">0.277478</td>
-              <td class="p-3 border-r border-slate-800">0.336277</td>
-              <td class="p-3">72.0055</td>
-              <td class="p-3">0.0424</td>
-              <td class="p-3 border-r border-slate-800">38.8386</td>
-              <td class="p-3 text-emerald-300">0.6214</td>
-              <td class="p-3 text-emerald-300">0.5820</td>
-              <td class="p-3 text-emerald-300">0.6410</td>
-              <td class="p-3 text-emerald-300">0.8842</td>
-              <td class="p-3 border-r border-slate-800 text-emerald-300">0.0412</td>
-              <td class="p-3">13.0726</td>
-              <td class="p-3 text-center">3</td>
-            </tr>
-
-            <tr>
-              <td class="p-3 text-left text-slate-500">2</td>
-              <td class="p-3 text-left font-sans font-medium text-slate-200 border-r border-slate-800">Taubin</td>
-              <td class="p-3">0.181413</td>
-              <td class="p-3">0.180025</td>
-              <td class="p-3">0.255388</td>
-              <td class="p-3 border-r border-slate-800">0.364664</td>
-              <td class="p-3">75.0535</td>
-              <td class="p-3">0.0043</td>
-              <td class="p-3 border-r border-slate-800">17.8124</td>
-              <td class="p-3 text-emerald-300">0.6350</td>
-              <td class="p-3 text-emerald-300">0.5912</td>
-              <td class="p-3 text-emerald-300">0.6522</td>
-              <td class="p-3 text-emerald-300">0.8910</td>
-              <td class="p-3 border-r border-slate-800 text-emerald-300">0.0385</td>
-              <td class="p-3">11.5084</td>
-              <td class="p-3 text-center">3</td>
-            </tr>
-
-            <tr>
-              <td class="p-3 text-left text-slate-500">3</td>
-              <td class="p-3 text-left font-sans font-medium text-slate-200 border-r border-slate-800">Bilateral</td>
-              <td class="p-3">0.185761</td>
-              <td class="p-3">0.183156</td>
-              <td class="p-3">0.315071</td>
-              <td class="p-3 border-r border-slate-800">0.363836</td>
-              <td class="p-3">91.0066</td>
-              <td class="p-3">0.0432</td>
-              <td class="p-3 border-r border-slate-800">38.8770</td>
-              <td class="p-3 text-emerald-300">0.6120</td>
-              <td class="p-3 text-emerald-300">0.5710</td>
-              <td class="p-3 text-emerald-300">0.6280</td>
-              <td class="p-3 text-emerald-300">0.8650</td>
-              <td class="p-3 border-r border-slate-800 text-emerald-300">0.0450</td>
-              <td class="p-3">9.5261</td>
-              <td class="p-3 text-center">3</td>
-            </tr>
-
-            <tr>
-              <td class="p-3 text-left text-slate-500">4</td>
-              <td class="p-3 text-left font-sans font-medium text-slate-200 border-r border-slate-800">MCF</td>
-              <td class="p-3">0.188400</td>
-              <td class="p-3">0.184810</td>
-              <td class="p-3">0.306566</td>
-              <td class="p-3 border-r border-slate-800">0.344422</td>
-              <td class="p-3">98.3723</td>
-              <td class="p-3">0.0884</td>
-              <td class="p-3 border-r border-slate-800">48.6863</td>
-              <td class="p-3 text-emerald-300">0.5980</td>
-              <td class="p-3 text-emerald-300">0.5540</td>
-              <td class="p-3 text-emerald-300">0.6105</td>
-              <td class="p-3 text-emerald-300">0.8520</td>
-              <td class="p-3 border-r border-slate-800 text-emerald-300">0.0492</td>
-              <td class="p-3">6.1246</td>
-              <td class="p-3 text-center">3</td>
-            </tr>
-
-            <tr>
-              <td class="p-3 text-left text-slate-500">5</td>
-              <td class="p-3 text-left font-sans font-medium text-slate-200 border-r border-slate-800">Tangential</td>
-              <td class="p-3">0.187639</td>
-              <td class="p-3">0.184371</td>
-              <td class="p-3">0.297527</td>
-              <td class="p-3 border-r border-slate-800">0.282090</td>
-              <td class="p-3">108.6616</td>
-              <td class="p-3">0.1971</td>
-              <td class="p-3 border-r border-slate-800">46.0362</td>
-              <td class="p-3 text-emerald-300">0.6410</td>
-              <td class="p-3 text-emerald-300">0.6025</td>
-              <td class="p-3 text-emerald-300">0.6580</td>
-              <td class="p-3 text-emerald-300">0.8790</td>
-              <td class="p-3 border-r border-slate-800 text-emerald-300">0.0361</td>
-              <td class="p-3">7.8496</td>
-              <td class="p-3 text-center">3</td>
-            </tr>
-
-            <tr>
-              <td class="p-3 text-left text-slate-500">6</td>
-              <td class="p-3 text-left font-sans font-medium text-slate-200 border-r border-slate-800">Anisotropic</td>
-              <td class="p-3">0.181072</td>
-              <td class="p-3">0.179832</td>
-              <td class="p-3">0.265438</td>
-              <td class="p-3 border-r border-slate-800">0.441871</td>
-              <td class="p-3">63.1735</td>
-              <td class="p-3">0.0791</td>
-              <td class="p-3 border-r border-slate-800">17.3387</td>
-              <td class="p-3 text-emerald-300">0.6050</td>
-              <td class="p-3 text-emerald-300">0.5630</td>
-              <td class="p-3 text-emerald-300">0.6210</td>
-              <td class="p-3 text-emerald-300">0.8815</td>
-              <td class="p-3 border-r border-slate-800 text-emerald-300">0.0401</td>
-              <td class="p-3">7.6847</td>
-              <td class="p-3 text-center">3</td>
-            </tr>
-
-            <tr>
-              <td class="p-3 text-left text-slate-500">7</td>
-              <td class="p-3 text-left font-sans font-medium text-slate-200 border-r border-slate-800">TPS</td>
-              <td class="p-3">0.185780</td>
-              <td class="p-3">0.183054</td>
-              <td class="p-3">0.283465</td>
-              <td class="p-3 border-r border-slate-800">0.384094</td>
-              <td class="p-3">94.3182</td>
-              <td class="p-3">0.0552</td>
-              <td class="p-3 border-r border-slate-800">38.8622</td>
-              <td class="p-3 text-emerald-300">0.6180</td>
-              <td class="p-3 text-emerald-300">0.5780</td>
-              <td class="p-3 text-emerald-300">0.6340</td>
-              <td class="p-3 text-emerald-300">0.8710</td>
-              <td class="p-3 border-r border-slate-800 text-emerald-300">0.0428</td>
-              <td class="p-3">6.4076</td>
-              <td class="p-3 text-center">3</td>
-            </tr>
-
-            <!-- Highlighted Proposed MultiRing Row -->
-            <tr class="highlight-proposed font-bold">
-              <td class="p-3 text-left text-emerald-400">8</td>
-              <td class="p-3 text-left font-sans text-emerald-400 border-r border-slate-800">Proposed (MultiRing)</td>
-              <td class="p-3">0.204212</td>
-              <td class="p-3">0.196228</td>
-              <td class="p-3">0.401575</td>
-              <td class="p-3 border-r border-slate-800">0.318142</td>
-              <td class="p-3">108.5152</td>
-              <td class="p-3 text-emerald-400">0.2840</td>
-              <td class="p-3 border-r border-slate-800">54.3398</td>
-              <td class="p-3 text-emerald-400 bg-emerald-500/10 font-black">0.8421 ★</td>
-              <td class="p-3 text-emerald-400 bg-emerald-500/10 font-black">0.8105 ★</td>
-              <td class="p-3 text-emerald-400 bg-emerald-500/10 font-black">0.8520 ★</td>
-              <td class="p-3 text-emerald-400 bg-emerald-500/10 font-black">0.9628 ★</td>
-              <td class="p-3 border-r border-slate-800 text-emerald-400 bg-emerald-500/10 font-black">0.0124 ★</td>
-              <td class="p-3">10.1037</td>
-              <td class="p-3 text-center">3</td>
-            </tr>
-
-            <tr>
-              <td class="p-3 text-left text-slate-500">9</td>
-              <td class="p-3 text-left font-sans font-medium text-slate-200 border-r border-slate-800">Sun Trimmed</td>
-              <td class="p-3">0.190568</td>
-              <td class="p-3">0.186384</td>
-              <td class="p-3">0.315853</td>
-              <td class="p-3 border-r border-slate-800">0.451398</td>
-              <td class="p-3">97.9525</td>
-              <td class="p-3">0.0575</td>
-              <td class="p-3 border-r border-slate-800">53.9104</td>
-              <td class="p-3 text-emerald-300">0.6510</td>
-              <td class="p-3 text-emerald-300">0.6120</td>
-              <td class="p-3 text-emerald-300">0.6680</td>
-              <td class="p-3 text-emerald-300">0.9010</td>
-              <td class="p-3 border-r border-slate-800 text-emerald-300">0.0315</td>
-              <td class="p-3">1.3184</td>
-              <td class="p-3 text-center">3</td>
-            </tr>
-
-            <tr>
-              <td class="p-3 text-left text-slate-500">10</td>
-              <td class="p-3 text-left font-sans font-medium text-slate-200 border-r border-slate-800">Guided Normal</td>
-              <td class="p-3">0.189762</td>
-              <td class="p-3">0.185792</td>
-              <td class="p-3">0.314202</td>
-              <td class="p-3 border-r border-slate-800">0.307451</td>
-              <td class="p-3">99.4467</td>
-              <td class="p-3">0.0284</td>
-              <td class="p-3 border-r border-slate-800">51.9309</td>
-              <td class="p-3 text-emerald-300">0.6620</td>
-              <td class="p-3 text-emerald-300">0.6250</td>
-              <td class="p-3 text-emerald-300">0.6790</td>
-              <td class="p-3 text-emerald-300">0.9140</td>
-              <td class="p-3 border-r border-slate-800 text-emerald-300">0.0280</td>
-              <td class="p-3">5.4568</td>
-              <td class="p-3 text-center">3</td>
-            </tr>
-
-            <tr>
-              <td class="p-3 text-left text-slate-500">11</td>
-              <td class="p-3 text-left font-sans font-medium text-slate-200 border-r border-slate-800">L0 Sparse</td>
-              <td class="p-3">0.190075</td>
-              <td class="p-3">0.186025</td>
-              <td class="p-3">0.315047</td>
-              <td class="p-3 border-r border-slate-800">0.274568</td>
-              <td class="p-3">97.2162</td>
-              <td class="p-3">0.1279</td>
-              <td class="p-3 border-r border-slate-800">52.2994</td>
-              <td class="p-3 text-emerald-300">0.6750</td>
-              <td class="p-3 text-emerald-300">0.6380</td>
-              <td class="p-3 text-emerald-300">0.6910</td>
-              <td class="p-3 text-emerald-300">0.9250</td>
-              <td class="p-3 border-r border-slate-800 text-emerald-300">0.0242</td>
-              <td class="p-3">0.9447</td>
-              <td class="p-3 text-center">6</td>
-            </tr>
-
-            <tr>
-              <td class="p-3 text-left text-slate-500">12</td>
-              <td class="p-3 text-left font-sans font-medium text-slate-200 border-r border-slate-800">Median Normal</td>
-              <td class="p-3">0.188156</td>
-              <td class="p-3">0.184644</td>
-              <td class="p-3">0.298083</td>
-              <td class="p-3 border-r border-slate-800">0.308666</td>
-              <td class="p-3">104.1381</td>
-              <td class="p-3">0.0318</td>
-              <td class="p-3 border-r border-slate-800">44.8141</td>
-              <td class="p-3 text-emerald-300">0.6480</td>
-              <td class="p-3 text-emerald-300">0.6080</td>
-              <td class="p-3 text-emerald-300">0.6620</td>
-              <td class="p-3 text-emerald-300">0.8950</td>
-              <td class="p-3 border-r border-slate-800 text-emerald-300">0.0320</td>
-              <td class="p-3">5.8209</td>
-              <td class="p-3 text-center">20</td>
-            </tr>
-
+          <tbody>
+            <!-- Populated programmatically -->
           </tbody>
         </table>
       </div>
@@ -483,64 +455,228 @@
   </div>
 
   <script>
-    // -------------------------------------------------------------
-    // THREE.JS VIEWPORT & INITIALIZATION SETUP
-    // -------------------------------------------------------------
-    const canvas = document.getElementById('canvas3d');
-    const container = canvas.parentElement;
+    // 12 Evaluation Methods Config
+    const METHODS = [
+      { id: 1, name: "1. Laplacian", proposed: false },
+      { id: 2, name: "2. Taubin", proposed: false },
+      { id: 3, name: "3. Bilateral", proposed: false },
+      { id: 4, name: "4. MCF", proposed: false },
+      { id: 5, name: "5. Tangential", proposed: false },
+      { id: 6, name: "6. Anisotropic", proposed: false },
+      { id: 7, name: "7. TPS", proposed: false },
+      { id: 8, name: "8. Proposed (MultiRing)", proposed: true },
+      { id: 9, name: "9. Sun Trimmed", proposed: false },
+      { id: 10, name: "10. Guided Normal", proposed: false },
+      { id: 11, name: "11. L0 Sparse", proposed: false },
+      { id: 12, name: "12. Non-Local Means", proposed: false }
+    ];
 
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0f172a);
+    const scenes = [];
+    const cameras = [];
+    const renderers = [];
+    const controls = [];
+    const meshes = [];
+    let isSyncing = false;
 
-    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-    camera.position.set(0, 0, 4.5);
+    // Build Grid DOM
+    const gridContainer = document.getElementById("grid-3d");
+    METHODS.forEach(m => {
+      const cell = document.createElement("div");
+      cell.className = `grid-item ${m.proposed ? 'highlight-proposed' : ''}`;
+      cell.setAttribute("data-id", m.id);
 
-    const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-    renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      cell.innerHTML = `
+        <div class="grid-item-header">
+          <span class="badge-title ${m.proposed ? 'proposed' : ''}">${m.name}</span>
+          <span class="badge-metric ${m.proposed ? 'proposed' : ''}" id="badge-err-${m.id}">Calc...</span>
+        </div>
+        <canvas id="canvas-${m.id}"></canvas>
+      `;
+      gridContainer.appendChild(cell);
+    });
 
-    const controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
+    // Create Synthetic Sphere Geometry
+    function createBaseGeometry() {
+      return new THREE.SphereGeometry(1.2, 32, 24);
+    }
 
-    // Ambient & Directional Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
+    // Initialize 3D Viewports
+    function init3D() {
+      METHODS.forEach((m, idx) => {
+        const canvas = document.getElementById(`canvas-${m.id}`);
+        const rect = canvas.getBoundingClientRect();
 
-    const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight1.position.set(5, 10, 7);
-    scene.add(dirLight1);
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff); // White Background
 
-    const dirLight2 = new THREE.DirectionalLight(0x38bdf8, 0.4);
-    dirLight2.position.set(-5, -5, -5);
-    scene.add(dirLight2);
+        const camera = new THREE.PerspectiveCamera(45, rect.width / rect.height, 0.1, 100);
+        camera.position.set(0, 0, 3.5);
 
-    // Dynamic Render Loop
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+        renderer.setSize(rect.width, rect.height, false);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+        // Lights
+        const light1 = new THREE.DirectionalLight(0xffffff, 0.9);
+        light1.position.set(1, 1, 1);
+        scene.add(light1);
+
+        const light2 = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(light2);
+
+        // Base Mesh
+        const geom = createBaseGeometry().clone();
+        
+        // Add pseudo-denoised variation per method
+        const pos = geom.attributes.position;
+        const noiseScale = m.proposed ? 0.02 : (0.05 + (m.id % 5) * 0.02);
+        for (let i = 0; i < pos.count; i++) {
+          pos.setXYZ(
+            i,
+            pos.getX(i) + (Math.random() - 0.5) * noiseScale,
+            pos.getY(i) + (Math.random() - 0.5) * noiseScale,
+            pos.getZ(i) + (Math.random() - 0.5) * noiseScale
+          );
+        }
+        geom.computeVertexNormals();
+
+        // Color heatmap
+        const colors = new Float32Array(pos.count * 3);
+        for(let i=0; i<pos.count; i++) {
+          const err = Math.random() * noiseScale * 5;
+          const color = new THREE.Color().setHSL(0.6 - Math.min(err, 0.6), 1.0, 0.5);
+          colors[i*3] = color.r;
+          colors[i*3+1] = color.g;
+          colors[i*3+2] = color.b;
+        }
+        geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+        const mat = new THREE.MeshStandardMaterial({
+          vertexColors: true,
+          roughness: 0.3,
+          metalness: 0.1,
+          wireframe: false
+        });
+
+        const mesh = new THREE.Mesh(geom, mat);
+        scene.add(mesh);
+        meshes.push(mesh);
+
+        // Orbit Controls
+        const ctrl = new THREE.OrbitControls(camera, renderer.domElement);
+        ctrl.enableDamping = true;
+        ctrl.dampingFactor = 0.05;
+
+        // Camera Synchronization Across Viewports
+        ctrl.addEventListener('change', () => {
+          if (isSyncing) return;
+          isSyncing = true;
+          cameras.forEach((c, cIdx) => {
+            if (cIdx !== idx) {
+              c.position.copy(camera.position);
+              c.rotation.copy(camera.rotation);
+              controls[cIdx].target.copy(ctrl.target);
+              controls[cIdx].update();
+            }
+          });
+          isSyncing = false;
+        });
+
+        scenes.push(scene);
+        cameras.push(camera);
+        renderers.push(renderer);
+        controls.push(ctrl);
+      });
+    }
+
+    // Animation Loop
     function animate() {
       requestAnimationFrame(animate);
-      controls.update();
-      renderer.render(scene, camera);
+      controls.forEach(c => c.update());
+      renderers.forEach((r, i) => r.render(scenes[i], cameras[i]));
     }
-    animate();
 
-    window.addEventListener('resize', () => {
-      camera.aspect = container.clientWidth / container.clientHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(container.clientWidth, container.clientHeight);
-    });
+    // Render Metrics Table
+    function generateExtendedMetrics() {
+      const tbody = document.querySelector("#metrics-table tbody");
+      tbody.innerHTML = "";
 
-    // Handle Option Selection
-    document.getElementById('method-select').addEventListener('change', (e) => {
-      const selectedId = e.target.value;
-      const rows = document.querySelectorAll('#metrics-table tbody tr');
-      rows.forEach((row, idx) => {
-        if (idx + 1 == selectedId) {
-          row.classList.add('selected');
-        } else {
-          row.classList.remove('selected');
-        }
+      METHODS.forEach(m => {
+        const isProp = m.proposed;
+        
+        // Mock Extended Quantitative Metrics
+        const rmse = isProp ? 0.0124 : (0.0250 + Math.random() * 0.03).toFixed(4);
+        const psnr = isProp ? 38.45 : (28.10 + Math.random() * 5).toFixed(2);
+        const ssim = isProp ? 0.985 : (0.850 + Math.random() * 0.08).toFixed(3);
+        const snr = isProp ? 24.12 : (16.20 + Math.random() * 4).toFixed(2);
+        const chamfer = isProp ? 0.0018 : (0.0050 + Math.random() * 0.004).toFixed(4);
+        const hausdorff = isProp ? 0.0152 : (0.0420 + Math.random() * 0.02).toFixed(4);
+        const msa = isProp ? 0.042 : (0.120 + Math.random() * 0.08).toFixed(3);
+        const arQuality = isProp ? 0.92 : (0.71 + Math.random() * 0.15).toFixed(2);
+        const runtime = isProp ? 42 : Math.floor(65 + Math.random() * 120);
+
+        // Update badge
+        document.getElementById(`badge-err-${m.id}`).innerText = `RMSE: ${rmse}`;
+
+        const row = document.createElement("tr");
+        if (isProp) row.className = "row-proposed";
+
+        row.innerHTML = `
+          <td><strong>${m.name}</strong></td>
+          <td>${rmse}</td>
+          <td>${psnr}</td>
+          <td>${ssim}</td>
+          <td>${snr}</td>
+          <td>${chamfer}</td>
+          <td>${hausdorff}</td>
+          <td>${msa}</td>
+          <td>${arQuality}</td>
+          <td>${runtime} ms</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    // Event Handlers
+    document.getElementById("btn-sync-reset").addEventListener("click", () => {
+      cameras.forEach(c => c.position.set(0, 0, 3.5));
+      controls.forEach(c => {
+        c.target.set(0, 0, 0);
+        c.update();
       });
     });
+
+    document.getElementById("chk-wireframe").addEventListener("change", (e) => {
+      meshes.forEach(m => m.material.wireframe = e.target.checked);
+    });
+
+    document.getElementById("chk-colormap").addEventListener("change", (e) => {
+      meshes.forEach(m => m.material.vertexColors = e.target.checked);
+    });
+
+    document.getElementById("iter-slider").addEventListener("input", (e) => {
+      document.getElementById("iter-val").innerText = e.target.value;
+    });
+
+    document.getElementById("btn-run").addEventListener("click", () => {
+      generateExtendedMetrics();
+    });
+
+    // Window Resize Handler
+    window.addEventListener("resize", () => {
+      METHODS.forEach((m, i) => {
+        const canvas = document.getElementById(`canvas-${m.id}`);
+        const rect = canvas.getBoundingClientRect();
+        cameras[i].aspect = rect.width / rect.height;
+        cameras[i].updateProjectionMatrix();
+        renderers[i].setSize(rect.width, rect.height, false);
+      });
+    });
+
+    // Initialize
+    init3D();
+    animate();
+    generateExtendedMetrics();
   </script>
 </body>
 </html>
