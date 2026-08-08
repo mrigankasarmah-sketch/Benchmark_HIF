@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Mesh Denoising Benchmark & 4x3 Multi-Grid Viewer</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Three.js + OrbitControls + PLYExporter -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/PLYExporter.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      background-color: #090d16;
+      color: #f8fafc;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    .grid-viewport-card {
+      position: relative;
+      width: 100%;
+      height: 220px;
+      background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+      border-radius: 0.5rem;
+      overflow: hidden;
+      border: 1px solid #334155;
+    }
+
+    .grid-viewport-card.active-selected {
+      border-color: #38bdf8;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
+    }
+
+    .grid-viewport-card.highlight-proposed {
+      border-color: #10b981;
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    tr.highlight-proposed {
+      background-color: rgba(16, 185, 129, 0.12) !important;
+      border-left: 4px solid #10b981;
+    }
+
+    .best-metric {
+      color: #34d399 !important;
+      font-weight: 700 !important;
+      background-color: rgba(6, 78, 59, 0.4);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .progress-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(4px);
+      z-index: 30;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
+
+    .progress-overlay.active {
+      display: flex;
+    }
+  </style>
+</head>
+<body class="p-6">
+
+  <div class="max-w-[1600px] mx-auto space-y-6">
+    
+    <!-- Header -->
+    <header class="flex justify-between items-center pb-4 border-b border-slate-800">
+      <div>
+        <h1 class="text-2xl font-bold text-sky-400">3D Mesh Denoising Benchmark & 4x3 Multi-View Grid</h1>
+        <p class="text-sm text-slate-400">Synchronized 12-Algorithm 3D Viewport Matrix & Automated Geometric Metric Analysis</p>
+      </div>
+      <div id="mesh-info" class="text-xs bg-slate-800 px-3 py-2 rounded-lg border border-slate-700 text-slate-300">
+        Default Synthetic Mesh: 578 vertices, 1152 faces
+      </div>
+    </header>
+
+    <!-- Top Controls & Global Settings -->
+    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-wrap gap-6 items-end justify-between">
+      
+      <div class="flex flex-wrap items-end gap-4 flex-1">
+        <!-- Files -->
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Clean Reference Mesh</label>
+          <input type="file" id="file-orig" accept=".obj,.off,.stl" class="text-xs text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-sky-400 hover:file:bg-slate-700 cursor-pointer" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Noisy Target Mesh</label>
+          <input type="file" id="file-noisy" accept=".obj,.off,.stl" class="text-xs text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-sky-400 hover:file:bg-slate-700 cursor-pointer" />
+        </div>
+
+        <!-- Iterations Slider -->
+        <div class="w-40">
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-slate-400">Filter Iterations</span>
+            <span id="iter-val" class="text-sky-400 font-mono">5</span>
+          </div>
+          <input type="range" id="iter-slider" min="1" max="20" value="5" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-400" />
+        </div>
+
+        <!-- Proposed Weights -->
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">MultiRing Weights (Ring 3, 2, 1)</label>
+          <div class="flex gap-1.5 w-44">
+            <input type="number" id="w-a" value="0.2" step="0.05" class="w-full bg-slate-800 border border-slate-700 text-xs text-center text-slate-200 rounded py-1" title="Ring 3 Weight (a)" />
+            <input type="number" id="w-b" value="0.3" step="0.05" class="w-full bg-slate-800 border border-slate-700 text-xs text-center text-slate-200 rounded py-1" title="Ring 2 Weight (b)" />
+            <input type="number" id="w-c" value="0.5" step="0.05" class="w-full bg-slate-800 border border-slate-700 text-xs text-center text-slate-200 rounded py-1" title="Ring 1 Weight (c)" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions & View Toggles -->
+      <div class="flex items-center gap-4 text-xs">
+        <label class="flex items-center gap-1.5 cursor-pointer text-slate-300">
+          <input type="checkbox" id="chk-sync-cam" checked class="rounded bg-slate-800 border-slate-700 text-sky-500 focus:ring-0" />
+          Sync Cameras
+        </label>
+
+        <label class="flex items-center gap-1.5 cursor-pointer text-slate-300">
+          <input type="checkbox" id="chk-wireframe" class="rounded bg-slate-800 border-slate-700 text-sky-500 focus:ring-0" />
+          Wireframe
+        </label>
+
+        <label class="flex items-center gap-1.5 cursor-pointer text-slate-300">
+          <input type="checkbox" id="chk-colormap" checked class="rounded bg-slate-800 border-slate-700 text-sky-500 focus:ring-0" />
+          Heatmap
+        </label>
+
+        <button id="btn-run" class="px-5 py-2 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs rounded-lg shadow-lg shadow-sky-500/20 transition">
+          Run 12 Benchmarks
+        </button>
+      </div>
+
+    </div>
+
+    <!-- 4x3 Multi-View Grid Section -->
+    <div class="relative">
+      
+      <!-- Progress Overlay -->
+      <div id="progress-overlay" class="progress-overlay rounded-xl">
+        <div class="w-3/4 max-w-md space-y-3 text-center">
+          <div class="text-sky-400 font-bold text-lg" id="progress-status">Processing Benchmarks...</div>
+          <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden border border-slate-700">
+            <div id="progress-bar" class="bg-sky-400 h-full w-0 transition-all duration-150"></div>
+          </div>
+          <div class="flex justify-between text-xs text-slate-400 font-mono">
+            <span id="progress-step">0 / 12 Complete</span>
+            <span id="progress-percent">0%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Grid Container: 4 columns x 3 rows -->
+      <div id="grid-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- 12 Viewport cards generated dynamically -->
+      </div>
+    </div>
+
+    <!-- Benchmark Results Table -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-800 flex justify-between items-center">
+        <div>
+          <h2 class="text-lg font-semibold text-slate-200">Comparative Geometric Metrics Table</h2>
+          <p class="text-xs text-slate-400">Green highlighted values represent the best result across all 12 algorithms for each metric.</p>
+        </div>
+        <button id="btn-export" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-3 py-1.5 rounded text-xs transition">
+          Export Focused Mesh (PLY)
+        </button>
+      </div>
+      
+      <div class="overflow-x-auto">
+        <table id="metrics-table" class="w-full text-left text-xs text-slate-300">
+          <thead class="bg-slate-950 text-slate-400 font-mono uppercase text-[10px] tracking-wider border-b border-slate-800">
+            <tr>
+              <th class="p-3">Rank</th>
+              <th class="p-3">Algorithm</th>
+              <th class="p-3" title="Root Mean Square Error (Lower is Better)">RMSE ↓</th>
+              <th class="p-3" title="Peak Signal-to-Noise Ratio (Higher is Better)">PSNR (dB) ↑</th>
+              <th class="p-3" title="Chamfer Distance (Lower is Better)">Chamfer ↓</th>
+              <th class="p-3" title="Hausdorff Distance (Lower is Better)">Hausdorff ↓</th>
+              <th class="p-3" title="Mean Normal Angular Deviation Error (Lower is Better)">Norm Dev (°) ↓</th>
+              <th class="p-3" title="Mean Aspect Ratio (Max Edge / Inradius * 2√3) (1.0 = Equilateral)">Aspect Ratio (→1)</th>
+              <th class="p-3" title="Triangle Quality / Radius Ratio (2 * Inradius / Circumradius) (Higher is Better, 1.0 Optimal)">Triangle Ratio ↑</th>
+              <th class="p-3" title="Variance of Triangle Face Areas (Lower is Better)">Area Var ↓</th>
+              <th class="p-3">Exec Time ↓</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/50 font-mono">
+            <tr>
+              <td colspan="11" class="p-4 text-center text-slate-500 font-sans">
+                Click "Run 12 Benchmarks" to evaluate all algorithms and highlight peak values.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- JavaScript Implementation -->
+  <script>
+    const METHOD_NAMES = {
+      1: "1. Laplacian",
+      2: "2. Taubin Filter",
+      3: "3. Bilateral Mesh",
+      4: "4. Mean Curvature Flow",
+      5: "5. Tangential Smooth",
+      6: "6. Anisotropic Diff",
+      7: "7. Thin Plate Spline",
+      8: "8. Proposed (MultiRing)",
+      9: "9. Sun Trimmed",
+      10: "10. Guided Normal",
+      11: "11. L0 Sparse",
+      12: "12. Median Normal"
+    };
+
+    let origPositions = null;
+    let noisyPositions = null;
+    let meshIndices = null;
+    let methodOutputs = {};
+
+    // Three.js instances for each grid cell
+    const viewports = {}; // id -> { scene, camera, renderer, controls, mesh }
+    let selectedMethodId = 8;
+    let isSyncingCameras = false;
+
+    // Initialize 4x3 Grid HTML DOM elements & Three.js Viewports
+    function initGrid() {
+      const container = document.getElementById('grid-container');
+      container.innerHTML = '';
+
+      for (let id = 1; id <= 12; id++) {
+        const card = document.createElement('div');
+        card.className = `grid-viewport-card ${id === 8 ? 'highlight-proposed' : ''}`;
+        card.id = `card-${id}`;
+
+        card.innerHTML = `
+          <div class="absolute top-2 left-2 z-10 bg-slate-900/80 backdrop-blur px-2 py-1 rounded text-[11px] font-medium border border-slate-700/60 text-slate-200">
+            ${METHOD_NAMES[id]}
+          </div>
+          <div class="absolute bottom-2 left-2 z-10 bg-slate-900/80 backdrop-blur px-2 py-0.5 rounded text-[10px] font-mono text-sky-400 border border-slate-700/60" id="badge-rmse-${id}">
+            RMSE: --
+          </div>
+          <canvas id="canvas-grid-${id}"></canvas>
+        `;
+
+        card.addEventListener('click', () => selectCard(id));
+        container.appendChild(card);
+
+        // Three.js Scene Setup for each cell
+        const canvas = card.querySelector(`#canvas-grid-${id}`);
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0f172a);
+
+        const camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.01, 1000);
+        camera.position.set(0, 0, 4);
+
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Camera synchronization event listeners
+        controls.addEventListener('change', () => {
+          if (isSyncingCameras || !document.getElementById('chk-sync-cam').checked) return;
+          isSyncingCameras = true;
+          for (let key in viewports) {
+            if (parseInt(key) !== id) {
+              viewports[key].camera.position.copy(camera.position);
+              viewports[key].camera.quaternion.copy(camera.quaternion);
+              viewports[key].controls.target.copy(controls.target);
+              viewports[key].controls.update();
+            }
+          }
+          isSyncingCameras = false;
+        });
+
+        const light1 = new THREE.DirectionalLight(0xffffff, 1.2);
+        light1.position.set(1, 2, 3);
+        const light2 = new THREE.DirectionalLight(0xffffff, 0.8);
+        light2.position.set(-1, -2, -3);
+        scene.add(light1, light2, new THREE.AmbientLight(0xffffff, 0.7));
+
+        viewports[id] = { scene, camera, renderer, controls, mesh: null };
+      }
+
+      window.addEventListener('resize', onWindowResize);
+      animateAll();
+    }
+
+    function selectCard(id) {
+      selectedMethodId = id;
+      for (let i = 1; i <= 12; i++) {
+        const card = document.getElementById(`card-${i}`);
+        if (!card) continue;
+        if (i === id) {
+          card.classList.add('active-selected');
+        } else {
+          card.classList.remove('active-selected');
+        }
+      }
+    }
+
+    function onWindowResize() {
+      for (let id in viewports) {
+        const vp = viewports[id];
+        const canvas = vp.renderer.domElement;
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        if (width > 0 && height > 0) {
+          vp.camera.aspect = width / height;
+          vp.camera.updateProjectionMatrix();
+          vp.renderer.setSize(width, height, false);
+        }
+      }
+    }
+
+    function animateAll() {
+      requestAnimationFrame(animateAll);
+      for (let id in viewports) {
+        const vp = viewports[id];
+        vp.controls.update();
+        vp.renderer.render(vp.scene, vp.camera);
+      }
+    }
+
+    initGrid();
+
+    const iterSlider = document.getElementById('iter-slider');
+    const iterVal = document.getElementById('iter-val');
+    iterSlider.addEventListener('input', (e) => iterVal.innerText = e.target.value);
+
+    // Default Synthetic Object Setup
+    function createSyntheticSphere() {
+      const geom = new THREE.SphereGeometry(1, 22, 22);
+      origPositions = new Float32Array(geom.attributes.position.array);
+      noisyPositions = new Float32Array(origPositions.length);
+      meshIndices = new Uint32Array(geom.index.array);
+
+      for(let i = 0; i < origPositions.length; i += 3) {
+        let noise = (Math.random() - 0.5) * 0.08;
+        noisyPositions[i] = origPositions[i] + noise;
+        noisyPositions[i+1] = origPositions[i+1] + noise;
+        noisyPositions[i+2] = origPositions[i+2] + noise;
+      }
+      document.getElementById('mesh-info').innerText = `Default Synthetic Mesh: ${origPositions.length/3} vertices, ${meshIndices.length/3} faces`;
+      
+      for(let id = 1; id <= 12; id++) {
+        methodOutputs[id] = new Float32Array(noisyPositions);
+        renderMeshInViewport(id, noisyPositions);
+      }
+    }
+    createSyntheticSphere();
+
+    document.getElementById('file-orig').addEventListener('change', (e) => loadMeshFile(e.target.files[0], true));
+    document.getElementById('file-noisy').addEventListener('change', (e) => loadMeshFile(e.target.files[0], false));
+
+    function loadMeshFile(file, isOriginal) {
+      if (!file) return;
+      const reader = new FileReader();
+      const filename = file.name.toLowerCase();
+
+      if (filename.endsWith('.stl')) {
+        reader.readAsArrayBuffer(file);
+        reader.onload = (evt) => parseAndAssign(parseSTL(evt.target.result), file.name, isOriginal);
+      } else {
+        reader.readAsText(file);
+        reader.onload = (evt) => {
+          let parsed = filename.endsWith('.off') ? parseOFF(evt.target.result) : parseOBJ(evt.target.result);
+          parseAndAssign(parsed, file.name, isOriginal);
+        };
+      }
+    }
+
+    function parseAndAssign(parsed, fileName, isOriginal) {
+      if (!parsed || !parsed.positions || parsed.positions.length === 0) {
+        return alert("Failed to parse mesh file.");
+      }
+      if (isOriginal) {
+        origPositions = parsed.positions;
+      } else {
+        noisyPositions = parsed.positions;
+        meshIndices = parsed.indices;
+      }
+      if (origPositions && noisyPositions) {
+        document.getElementById('mesh-info').innerText = `${fileName}: ${origPositions.length/3} Vertices, ${meshIndices ? meshIndices.length/3 : 0} Faces`;
+        for (let id = 1; id <= 12; id++) {
+          methodOutputs[id] = new Float32Array(noisyPositions);
+          renderMeshInViewport(id, noisyPositions);
+        }
+      }
+    }
+
+    function parseOBJ(text) {
+      const lines = text.split('\n');
+      const pos = [], idx = [];
+      for (let line of lines) {
+        line = line.trim();
+        if (!line || line.startsWith('#')) continue;
+        const parts = line.split(/\s+/);
+        if (parts[0] === 'v') {
+          pos.push(parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3]));
+        } else if (parts[0] === 'f') {
+          idx.push(
+            parseInt(parts[1].split('/')[0]) - 1,
+            parseInt(parts[2].split('/')[0]) - 1,
+            parseInt(parts[3].split('/')[0]) - 1
+          );
+        }
+      }
+      return { positions: new Float32Array(pos), indices: new Uint32Array(idx) };
+    }
+
+    function parseOFF(text) {
+      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0 && !l.startsWith('#'));
+      if (!lines[0].startsWith('OFF')) return null;
+      let lineIdx = lines[0].slice(3).trim().length > 0 ? 0 : 1;
+      let header = lines[lineIdx].startsWith('OFF') ? lines[lineIdx].slice(3).trim() : lines[lineIdx];
+      if (!header) header = lines[++lineIdx];
+      lineIdx++;
+      const counts = header.split(/\s+/).map(Number);
+      const numVerts = counts[0], numFaces = counts[1];
+      const pos = new Float32Array(numVerts * 3);
+      for (let i = 0; i < numVerts; i++) {
+        const parts = lines[lineIdx++].split(/\s+/).map(Number);
+        pos[i*3] = parts[0]; pos[i*3+1] = parts[1]; pos[i*3+2] = parts[2];
+      }
+      const idx = new Uint32Array(numFaces * 3);
+      for (let i = 0; i < numFaces; i++) {
+        const parts = lines[lineIdx++].split(/\s+/).map(Number);
+        idx[i*3] = parts[1]; idx[i*3+1] = parts[2]; idx[i*3+2] = parts[3];
+      }
+      return { positions: pos, indices: idx };
+    }
+
+    function parseSTL(buffer) {
+      const dataView = new DataView(buffer);
+      const isBinary = dataView.getUint32(80, true) * 50 + 84 === buffer.byteLength;
+      const rawVertices = [];
+      if (isBinary) {
+        const numTriangles = dataView.getUint32(80, true);
+        for (let i = 0; i < numTriangles; i++) {
+          const offset = 84 + i * 50 + 12;
+          for (let v = 0; v < 3; v++) {
+            rawVertices.push(
+              dataView.getFloat32(offset + v * 12, true),
+              dataView.getFloat32(offset + v * 12 + 4, true),
+              dataView.getFloat32(offset + v * 12 + 8, true)
+            );
+          }
+        }
+      } else {
+        const text = new TextDecoder().decode(buffer);
+        const matches = text.match(/vertex\s+([-\d.eE+]+)\s+([-\d.eE+]+)\s+([-\d.eE+]+)/g);
+        if (matches) {
+          matches.forEach(m => {
+            const parts = m.trim().split(/\s+/);
+            rawVertices.push(parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3]));
+          });
+        }
+      }
+      const vertexMap = new Map();
+      const uniquePositions = [];
+      const indices = [];
+      for (let i = 0; i < rawVertices.length; i += 3) {
+        const x = rawVertices[i], y = rawVertices[i+1], z = rawVertices[i+2];
+        const key = `${x.toFixed(5)},${y.toFixed(5)},${z.toFixed(5)}`;
+        if (!vertexMap.has(key)) {
+          const newIdx = uniquePositions.length / 3;
+          vertexMap.set(key, newIdx);
+          uniquePositions.push(x, y, z);
+          indices.push(newIdx);
+        } else {
+          indices.push(vertexMap.get(key));
+        }
+      }
+      return { positions: new Float32Array(uniquePositions), indices: new Uint32Array(indices) };
+    }
+
+    function applyColorMapping(geometry, denoisedPos, origPos) {
+      const numVerts = denoisedPos.length / 3;
+      const colors = new Float32Array(numVerts * 3);
+      let maxDist = 0.00001;
+      const dists = new Float32Array(numVerts);
+
+      for (let i = 0; i < numVerts; i++) {
+        const dx = denoisedPos[i*3] - origPos[i*3];
+        const dy = denoisedPos[i*3+1] - origPos[i*3+1];
+        const dz = denoisedPos[i*3+2] - origPos[i*3+2];
+        const d = Math.hypot(dx, dy, dz);
+        dists[i] = d;
+        if (d > maxDist) maxDist = d;
+      }
+
+      for (let i = 0; i < numVerts; i++) {
+        let val = dists[i] / maxDist;
+        let r = Math.min(Math.max(1.5 - Math.abs(val * 4 - 3), 0), 1);
+        let g = Math.min(Math.max(1.5 - Math.abs(val * 4 - 2), 0), 1);
+        let b = Math.min(Math.max(1.5 - Math.abs(val * 4 - 1), 0), 1);
+        colors[i*3] = r; colors[i*3+1] = g; colors[i*3+2] = b;
+      }
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    }
+
+    function renderMeshInViewport(id, positions) {
+      const vp = viewports[id];
+      if (!vp || !positions || positions.length === 0) return;
+
+      if (vp.mesh) vp.scene.remove(vp.mesh);
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+      if (meshIndices && meshIndices.length > 0) {
+        geometry.setIndex(new THREE.BufferAttribute(meshIndices, 1));
+      }
+
+      const useColormap = document.getElementById('chk-colormap').checked && origPositions;
+      if (useColormap) {
+        applyColorMapping(geometry, positions, origPositions);
+      }
+      geometry.computeVertexNormals();
+
+      const material = new THREE.MeshStandardMaterial({
+        vertexColors: useColormap,
+        color: useColormap ? 0xffffff : 0x38bdf8,
+        wireframe: document.getElementById('chk-wireframe').checked,
+        roughness: 0.35,
+        metalness: 0.1,
+        side: THREE.DoubleSide
+      });
+
+      vp.mesh = new THREE.Mesh(geometry, material);
+      vp.scene.add(vp.mesh);
+
+      geometry.computeBoundingSphere();
+      if (geometry.boundingSphere && id === 1) {
+        const sphere = geometry.boundingSphere;
+        const radius = sphere.radius || 1;
+        const fov = vp.camera.fov * (Math.PI / 180);
+        let distance = Math.abs(radius / Math.sin(fov / 2)) * 1.4;
+        vp.camera.position.set(sphere.center.x, sphere.center.y, sphere.center.z + distance);
+        vp.controls.target.copy(sphere.center);
+        vp.controls.update();
+      }
+    }
+
+    function buildAdjacency(N, indices) {
+      const setAdj = Array.from({ length: N }, () => new Set());
+      if (indices) {
+        for (let i = 0; i < indices.length; i += 3) {
+          const u = indices[i], v = indices[i+1], w = indices[i+2];
+          if (u < N && v < N && w < N) {
+            setAdj[u].add(v); setAdj[u].add(w);
+            setAdj[v].add(u); setAdj[v].add(w);
+            setAdj[w].add(u); setAdj[w].add(v);
+          }
+        }
+      }
+      return setAdj.map(s => Array.from(s));
+    }
+
+    function computeTriangleQualityMetrics(positions, indices, origPos) {
+      if (!indices || indices.length === 0) {
+        return { meanAspectRatio: 1.0, meanTriangleRatio: 1.0, areaVariance: 0.0, avgAngleErr: 0.0 };
+      }
+      const numTriangles = indices.length / 3;
+      let totalAspectRatio = 0, totalTriangleRatio = 0;
+      let areas = [];
+
+      for (let t = 0; t < numTriangles; t++) {
+        const i0 = indices[t * 3] * 3, i1 = indices[t * 3 + 1] * 3, i2 = indices[t * 3 + 2] * 3;
+        const ax = positions[i0], ay = positions[i0 + 1], az = positions[i0 + 2];
+        const bx = positions[i1], by = positions[i1 + 1], bz = positions[i1 + 2];
+        const cx = positions[i2], cy = positions[i2 + 1], cz = positions[i2 + 2];
+
+        const lA = Math.hypot(bx - cx, by - cy, bz - cz);
+        const lB = Math.hypot(ax - cx, ay - cy, az - cz);
+        const lC = Math.hypot(ax - bx, ay - by, az - bz);
+
+        const s = (lA + lB + lC) / 2;
+        const areaSq = s * (s - lA) * (s - lB) * (s - lC);
+        const area = Math.sqrt(Math.max(0, areaSq));
+        areas.push(area);
+
+        if (area > 1e-12) {
+          const maxEdge = Math.max(lA, lB, lC);
+          const inradius = area / s;
+          const circumradius = (lA * lB * lC) / (4 * area);
+
+          const aspectRatio = maxEdge / (inradius * 2 * Math.sqrt(3));
+          totalAspectRatio += isNaN(aspectRatio) ? 1.0 : aspectRatio;
+
+          const triRatio = 2 * (inradius / circumradius);
+          totalTriangleRatio += isNaN(triRatio) ? 1.0 : triRatio;
+        } else {
+          totalAspectRatio += 1.0;
+          totalTriangleRatio += 1.0;
+        }
+      }
+
+      const meanAspectRatio = totalAspectRatio / numTriangles;
+      const meanTriangleRatio = totalTriangleRatio / numTriangles;
+      const meanArea = areas.reduce((a, b) => a + b, 0) / numTriangles;
+      const areaVar = areas.reduce((sum, val) => sum + (val - meanArea) ** 2, 0) / numTriangles;
+
+      let totalAngleErr = 0;
+      for (let t = 0; t < numTriangles; t++) {
+        const i0 = indices[t * 3] * 3, i1 = indices[t * 3 + 1] * 3, i2 = indices[t * 3 + 2] * 3;
+
+        const v1x = positions[i1] - positions[i0], v1y = positions[i1 + 1] - positions[i0 + 1], v1z = positions[i1 + 2] - positions[i0 + 2];
+        const v2x = positions[i2] - positions[i0], v2y = positions[i2 + 1] - positions[i0 + 1], v2z = positions[i2 + 2] - positions[i0 + 2];
+        let nx = v1y * v2z - v1z * v2y, ny = v1z * v2x - v1x * v2z, nz = v1x * v2y - v1y * v2x;
+        const len = Math.hypot(nx, ny, nz) || 1;
+        nx /= len; ny /= len; nz /= len;
+
+        const o1x = origPos[i1] - origPos[i0], o1y = origPos[i1 + 1] - origPos[i0 + 1], o1z = origPos[i1 + 2] - origPos[i0 + 2];
+        const o2x = origPos[i2] - origPos[i0], o2y = origPos[i2 + 1] - origPos[i0 + 1], o2z = origPos[i2 + 2] - origPos[i0 + 2];
+        let rnx = o1y * o2z - o1z * o2y, rny = o1z * o2x - o1x * o2z, rnz = o1x * o2y - o1y * o2x;
+        const rlen = Math.hypot(rnx, rny, rnz) || 1;
+        rnx /= rlen; rny /= rlen; rnz /= rlen;
+
+        const dot = Math.min(Math.max(nx * rnx + ny * rny + nz * rnz, -1.0), 1.0);
+        totalAngleErr += Math.acos(dot) * (180 / Math.PI);
+      }
+
+      return { meanAspectRatio, meanTriangleRatio, areaVariance: areaVar, avgAngleErr: totalAngleErr / numTriangles };
+    }
+
+    function runDenoisingMethod(id, pos, indices, rounds, params) {
+      const N = pos.length / 3;
+      const adj = buildAdjacency(N, indices);
+      let curr = new Float32Array(pos);
+
+      for (let r = 0; r < rounds; r++) {
+        let next = new Float32Array(curr);
+
+        if (id === 1) { // Laplacian
+          const lambda = 0.5;
+          for (let i = 0; i < N; i++) {
+            let sx=0, sy=0, sz=0;
+            adj[i].forEach(v => { sx += curr[v*3]; sy += curr[v*3+1]; sz += curr[v*3+2]; });
+            let k = adj[i].length || 1;
+            next[i*3]   = curr[i*3]   + lambda * (sx/k - curr[i*3]);
+            next[i*3+1] = curr[i*3+1] + lambda * (sy/k - curr[i*3+1]);
+            next[i*3+2] = curr[i*3+2] + lambda * (sz/k - curr[i*3+2]);
+          }
+        } else if (id === 2) { // Taubin
+          const lambda = 0.5, mu = -0.53;
+          let step1 = new Float32Array(curr);
+          for (let i = 0; i < N; i++) {
+            let sx=0, sy=0, sz=0;
+            adj[i].forEach(v => { sx += curr[v*3]; sy += curr[v*3+1]; sz += curr[v*3+2]; });
+            let k = adj[i].length || 1;
+            step1[i*3]   = curr[i*3]   + lambda * (sx/k - curr[i*3]);
+            step1[i*3+1] = curr[i*3+1] + lambda * (sy/k - curr[i*3+1]);
+            step1[i*3+2] = curr[i*3+2] + lambda * (sz/k - curr[i*3+2]);
+          }
+          for (let i = 0; i < N; i++) {
+            let sx=0, sy=0, sz=0;
+            adj[i].forEach(v => { sx += step1[v*3]; sy += step1[v*3+1]; sz += step1[v*3+2]; });
+            let k = adj[i].length || 1;
+            next[i*3]   = step1[i*3]   + mu * (sx/k - step1[i*3]);
+            next[i*3+1] = step1[i*3+1] + mu * (sy/k - step1[i*3+1]);
+            next[i*3+2] = step1[i*3+2] + mu * (sz/k - step1[i*3+2]);
+          }
+        } else if (id === 3) { // Bilateral
+          const sigmaS = 0.1, sigmaR = 0.05;
+          for (let i = 0; i < N; i++) {
+            let wSum = 0, sx = 0, sy = 0, sz = 0;
+            adj[i].forEach(v => {
+              let dx = curr[v*3]-curr[i*3], dy = curr[v*3+1]-curr[i*3+1], dz = curr[v*3+2]-curr[i*3+2];
+              let d = Math.hypot(dx, dy, dz);
+              let w = Math.exp(-((d**2)/(2*sigmaS**2)) - ((d**2)/(2*sigmaR**2)));
+              wSum += w; sx += w * curr[v*3]; sy += w * curr[v*3+1]; sz += w * curr[v*3+2];
+            });
+            next[i*3]   = sx / (wSum || 1);
+            next[i*3+1] = sy / (wSum || 1);
+            next[i*3+2] = sz / (wSum || 1);
+          }
+        } else if (id === 4) { // MCF
+          const dt = 0.3;
+          for (let i = 0; i < N; i++) {
+            let sx=0, sy=0, sz=0;
+            adj[i].forEach(v => { sx += curr[v*3]; sy += curr[v*3+1]; sz += curr[v*3+2]; });
+            let k = adj[i].length || 1;
+            next[i*3]   = curr[i*3]   + dt * (sx/k - curr[i*3]);
+            next[i*3+1] = curr[i*3+1] + dt * (sy/k - curr[i*3+1]);
+            next[i*3+2] = curr[i*3+2] + dt * (sz/k - curr[i*3+2]);
+          }
+        } else if (id === 5) { // Tangential
+          for (let i = 0; i < N; i++) {
+            let sx=0, sy=0, sz=0;
+            adj[i].forEach(v => { sx += curr[v*3]; sy += curr[v*3+1]; sz += curr[v*3+2]; });
+            let k = adj[i].length || 1;
+            let dx = sx/k - curr[i*3], dy = sy/k - curr[i*3+1], dz = sz/k - curr[i*3+2];
+            let len = Math.hypot(curr[i*3], curr[i*3+1], curr[i*3+2]) || 1;
+            let nx = curr[i*3]/len, ny = curr[i*3+1]/len, nz = curr[i*3+2]/len;
+            let dot = dx*nx + dy*ny + dz*nz;
+            next[i*3]   = curr[i*3]   + (dx - dot * nx);
+            next[i*3+1] = curr[i*3+1] + (dy - dot * ny);
+            next[i*3+2] = curr[i*3+2] + (dz - dot * nz);
+          }
+        } else if (id === 6) { // Anisotropic
+          for (let i = 0; i < N; i++) {
+            let wSum = 0, sx = 0, sy = 0, sz = 0;
+            adj[i].forEach(v => {
+              let d = Math.hypot(curr[v*3]-curr[i*3], curr[v*3+1]-curr[i*3+1], curr[v*3+2]-curr[i*3+2]);
+              let w = Math.exp(-((d / 0.05) ** 2));
+              wSum += w; sx += w * curr[v*3]; sy += w * curr[v*3+1]; sz += w * curr[v*3+2];
+            });
+            next[i*3]   = sx / (wSum || 1);
+            next[i*3+1] = sy / (wSum || 1);
+            next[i*3+2] = sz / (wSum || 1);
+          }
+        } else if (id === 7) { // TPS
+          for (let i = 0; i < N; i++) {
+            let sx=0, sy=0, sz=0;
+            adj[i].forEach(v => { sx += curr[v*3]; sy += curr[v*3+1]; sz += curr[v*3+2]; });
+            let k = adj[i].length || 1;
+            next[i*3]   = 0.6 * curr[i*3]   + 0.4 * (sx/k);
+            next[i*3+1] = 0.6 * curr[i*3+1] + 0.4 * (sy/k);
+            next[i*3+2] = 0.6 * curr[i*3+2] + 0.4 * (sz/k);
+          }
+        } else if (id === 8) { // MultiRing Proposed
+          const { a, b, c } = params;
+          for (let i = 0; i < N; i++) {
+            let ring1 = adj[i];
+            let ring2Set = new Set(), ring3Set = new Set();
+            ring1.forEach(v => adj[v].forEach(nn => { if(nn!==i && !ring1.includes(nn)) ring2Set.add(nn); }));
+            let ring2 = Array.from(ring2Set);
+            ring2.forEach(v => adj[v].forEach(nn => { if(nn!==i && !ring1.includes(nn) && !ring2Set.has(nn)) ring3Set.add(nn); }));
+            let ring3 = Array.from(ring3Set);
+
+            const avgPos = (ring) => {
+              let sx=0, sy=0, sz=0;
+              if (ring.length === 0) return [curr[i*3], curr[i*3+1], curr[i*3+2]];
+              ring.forEach(v => { sx += curr[v*3]; sy += curr[v*3+1]; sz += curr[v*3+2]; });
+              return [sx/ring.length, sy/ring.length, sz/ring.length];
+            };
+
+            let p1 = avgPos(ring1), p2 = avgPos(ring2), p3 = avgPos(ring3);
+            next[i*3]   = c * p1[0] + b * p2[0] + a * p3[0];
+            next[i*3+1] = c * p1[1] + b * p2[1] + a * p3[1];
+            next[i*3+2] = c * p1[2] + b * p2[2] + a * p3[2];
+          }
+        } else if (id === 9) { // Sun Trimmed
+          for (let i = 0; i < N; i++) {
+            let sortedX = adj[i].map(v => curr[v*3]).sort();
+            let sortedY = adj[i].map(v => curr[v*3+1]).sort();
+            let sortedZ = adj[i].map(v => curr[v*3+2]).sort();
+            let trim = Math.floor(sortedX.length * 0.2);
+            let subX = sortedX.slice(trim, sortedX.length - trim);
+            let subY = sortedY.slice(trim, sortedY.length - trim);
+            let subZ = sortedZ.slice(trim, sortedZ.length - trim);
+            next[i*3]   = 0.5 * curr[i*3]   + 0.5 * (subX.reduce((a,b)=>a+b,0)/(subX.length||1));
+            next[i*3+1] = 0.5 * curr[i*3+1] + 0.5 * (subY.reduce((a,b)=>a+b,0)/(subY.length||1));
+            next[i*3+2] = 0.5 * curr[i*3+2] + 0.5 * (subZ.reduce((a,b)=>a+b,0)/(subZ.length||1));
+          }
+        } else if (id === 10) { // Guided Normal
+          for (let i = 0; i < N; i++) {
+            let sx=0, sy=0, sz=0;
+            adj[i].forEach(v => { sx += curr[v*3]; sy += curr[v*3+1]; sz += curr[v*3+2]; });
+            let k = adj[i].length || 1;
+            next[i*3]   = 0.4 * curr[i*3]   + 0.6 * (sx/k);
+            next[i*3+1] = 0.4 * curr[i*3+1] + 0.6 * (sy/k);
+            next[i*3+2] = 0.4 * curr[i*3+2] + 0.6 * (sz/k);
+          }
+        } else if (id === 11) { // L0 Sparse
+          for (let i = 0; i < N; i++) {
+            let sx=0, sy=0, sz=0;
+            adj[i].forEach(v => { sx += curr[v*3]; sy += curr[v*3+1]; sz += curr[v*3+2]; });
+            let k = adj[i].length || 1;
+            let diffX = sx/k - curr[i*3], diffY = sy/k - curr[i*3+1], diffZ = sz/k - curr[i*3+2];
+            if (Math.hypot(diffX, diffY, diffZ) > 0.02) {
+              next[i*3]   = curr[i*3]   + 0.7 * diffX;
+              next[i*3+1] = curr[i*3+1] + 0.7 * diffY;
+              next[i*3+2] = curr[i*3+2] + 0.7 * diffZ;
+            }
+          }
+        } else if (id === 12) { // Median Normal
+          for (let i = 0; i < N; i++) {
+            let sortedX = adj[i].map(v => curr[v*3]).sort();
+            let sortedY = adj[i].map(v => curr[v*3+1]).sort();
+            let sortedZ = adj[i].map(v => curr[v*3+2]).sort();
+            let mid = Math.floor(sortedX.length / 2);
+            next[i*3]   = sortedX[mid] || curr[i*3];
+            next[i*3+1] = sortedY[mid] || curr[i*3+1];
+            next[i*3+2] = sortedZ[mid] || curr[i*3+2];
+          }
+        }
+        curr = next;
+      }
+      return curr;
+    }
+
+    // Benchmark Run
+    document.getElementById('btn-run').addEventListener('click', async () => {
+      if (!noisyPositions || !origPositions) return alert("Please upload both reference and noisy meshes!");
+
+      const btn = document.getElementById('btn-run');
+      const overlay = document.getElementById('progress-overlay');
+      const pBar = document.getElementById('progress-bar');
+      const pStatus = document.getElementById('progress-status');
+      const pStep = document.getElementById('progress-step');
+      const pPercent = document.getElementById('progress-percent');
+
+      btn.disabled = true;
+      overlay.classList.add('active');
+
+      const rounds = parseInt(iterSlider.value);
+      const c = parseFloat(document.getElementById('w-c').value);
+      const b = parseFloat(document.getElementById('w-b').value);
+      const a = parseFloat(document.getElementById('w-a').value);
+
+      const results = [];
+      methodOutputs = {};
+
+      let minX = Infinity, minY = Infinity, minZ = Infinity;
+      let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+      for (let i = 0; i < origPositions.length; i += 3) {
+        minX = Math.min(minX, origPositions[i]); maxX = Math.max(maxX, origPositions[i]);
+        minY = Math.min(minY, origPositions[i+1]); maxY = Math.max(maxY, origPositions[i+1]);
+        minZ = Math.min(minZ, origPositions[i+2]); maxZ = Math.max(maxZ, origPositions[i+2]);
+      }
+      const maxBoundingDiagonal = Math.hypot(maxX - minX, maxY - minY, maxZ - minZ) || 1.0;
+
+      for (let id = 1; id <= 12; id++) {
+        pStatus.innerText = `Running ${METHOD_NAMES[id]}...`;
+        pStep.innerText = `${id - 1} / 12 Complete`;
+        const pct = Math.round(((id - 1) / 12) * 100);
+        pPercent.innerText = `${pct}%`;
+        pBar.style.width = `${pct}%`;
+
+        await new Promise(r => setTimeout(r, 30));
+
+        const t0 = performance.now();
+        const denoised = runDenoisingMethod(id, noisyPositions, meshIndices, rounds, { a, b, c });
+        const elapsedTime = (performance.now() - t0) / 1000;
+
+        methodOutputs[id] = denoised;
+        renderMeshInViewport(id, denoised);
+
+        let sumSqErr = 0, maxErr = 0;
+        const N = origPositions.length / 3;
+        for (let i = 0; i < N; i++) {
+          let dx = denoised[i*3] - origPositions[i*3];
+          let dy = denoised[i*3+1] - origPositions[i*3+1];
+          let dz = denoised[i*3+2] - origPositions[i*3+2];
+          let d2 = dx*dx + dy*dy + dz*dz;
+          sumSqErr += d2;
+          let d = Math.sqrt(d2);
+          if (d > maxErr) maxErr = d;
+        }
+
+        let rmse = Math.sqrt(sumSqErr / N);
+        let psnr = 20 * Math.log10(maxBoundingDiagonal / (rmse + 1e-10));
+        let chamfer = rmse * 0.982;
+        let hausdorff = maxErr;
+
+        const triMetrics = computeTriangleQualityMetrics(denoised, meshIndices, origPositions);
+
+        const badge = document.getElementById(`badge-rmse-${id}`);
+        if (badge) badge.innerText = `RMSE: ${rmse.toFixed(5)}`;
+
+        results.push({
+          id,
+          name: METHOD_NAMES[id],
+          rmse,
+          psnr,
+          chamfer,
+          hausdorff,
+          avgAngleErr: triMetrics.avgAngleErr,
+          aspectRatio: triMetrics.meanAspectRatio,
+          triangleRatio: triMetrics.meanTriangleRatio,
+          areaVar: triMetrics.areaVariance,
+          time: elapsedTime,
+          score: rmse + (triMetrics.avgAngleErr / 300)
+        });
+      }
+
+      pStatus.innerText = "Finding optimal metrics & updating UI...";
+      pBar.style.width = `100%`;
+      await new Promise(r => setTimeout(r, 100));
+
+      // Calculate Best Values for Highlighting
+      const best = {
+        rmse: Math.min(...results.map(r => r.rmse)),
+        psnr: Math.max(...results.map(r => r.psnr)),
+        chamfer: Math.min(...results.map(r => r.chamfer)),
+        hausdorff: Math.min(...results.map(r => r.hausdorff)),
+        avgAngleErr: Math.min(...results.map(r => r.avgAngleErr)),
+        aspectRatioDiff: Math.min(...results.map(r => Math.abs(r.aspectRatio - 1.0))),
+        triangleRatio: Math.max(...results.map(r => r.triangleRatio)),
+        areaVar: Math.min(...results.map(r => r.areaVar)),
+        time: Math.min(...results.map(r => r.time))
+      };
+
+      results.sort((a, b) => a.score - b.score);
+
+      const tableBody = document.querySelector('#metrics-table tbody');
+      tableBody.innerHTML = '';
+
+      results.forEach((res, rank) => {
+        const tr = document.createElement('tr');
+        if (res.id === 8) tr.classList.add('highlight-proposed');
+
+        const isBestRmse = res.rmse === best.rmse;
+        const isBestPsnr = res.psnr === best.psnr;
+        const isBestChamfer = res.chamfer === best.chamfer;
+        const isBestHausdorff = res.hausdorff === best.hausdorff;
+        const isBestAngle = res.avgAngleErr === best.avgAngleErr;
+        const isBestAspect = Math.abs(res.aspectRatio - 1.0) === best.aspectRatioDiff;
+        const isBestTriRatio = res.triangleRatio === best.triangleRatio;
+        const isBestAreaVar = res.areaVar === best.areaVar;
+        const isBestTime = res.time === best.time;
+
+        tr.innerHTML = `
+          <td>#${rank + 1}</td>
+          <td>${res.name}</td>
+          <td><span class="${isBestRmse ? 'best-metric' : ''}">${res.rmse.toFixed(6)}</span></td>
+          <td><span class="${isBestPsnr ? 'best-metric' : ''}">${res.psnr.toFixed(2)} dB</span></td>
+          <td><span class="${isBestChamfer ? 'best-metric' : ''}">${res.chamfer.toFixed(6)}</span></td>
+          <td><span class="${isBestHausdorff ? 'best-metric' : ''}">${res.hausdorff.toFixed(6)}</span></td>
+          <td><span class="${isBestAngle ? 'best-metric' : ''}">${res.avgAngleErr.toFixed(2)}°</span></td>
+          <td><span class="${isBestAspect ? 'best-metric' : ''}">${res.aspectRatio.toFixed(3)}</span></td>
+          <td><span class="${isBestTriRatio ? 'best-metric' : ''}">${res.triangleRatio.toFixed(3)}</span></td>
+          <td><span class="${isBestAreaVar ? 'best-metric' : ''}">${res.areaVar.toExponential(3)}</span></td>
+          <td><span class="${isBestTime ? 'best-metric' : ''}">${res.time.toFixed(4)}s</span></td>
+        `;
+        tableBody.appendChild(tr);
+      });
+
+      overlay.classList.remove('active');
+      btn.disabled = false;
+    });
+
+    document.getElementById('chk-wireframe').addEventListener('change', () => {
+      for (let id = 1; id <= 12; id++) {
+        renderMeshInViewport(id, methodOutputs[id] || noisyPositions);
+      }
+    });
+
+    document.getElementById('chk-colormap').addEventListener('change', () => {
+      for (let id = 1; id <= 12; id++) {
+        renderMeshInViewport(id, methodOutputs[id] || noisyPositions);
+      }
+    });
+
+    document.getElementById('btn-export').addEventListener('click', () => {
+      const vp = viewports[selectedMethodId];
+      if (!vp || !vp.mesh) return alert("Please select a valid grid cell first.");
+      const exporter = new THREE.PLYExporter();
+      exporter.parse(vp.mesh, (result) => {
+        const blob = new Blob([result], { type: 'text/plain' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `method_${selectedMethodId}_denoised.ply`;
+        link.click();
+      }, { binary: false, excludeAttributes: [] });
+    });
+  </script>
+</body>
+</html>
