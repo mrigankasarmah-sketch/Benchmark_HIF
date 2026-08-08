@@ -36,12 +36,13 @@
     .title-group p { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; }
 
     .info-badge { font-size: 0.75rem; background: var(--bg-primary); padding: 0.375rem 0.75rem; border-radius: 0.375rem; border: 1px solid var(--border-color); font-family: monospace; }
-    .btn { padding: 0.375rem 0.875rem; border-radius: 0.375rem; font-size: 0.75rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
+    .btn { padding: 0.375rem 0.875rem; border-radius: 0.375rem; font-size: 0.75rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; transition: background-color 0.2s; }
     .btn-secondary { background-color: #f1f5f9; border-color: var(--border-color); color: var(--text-main); }
+    .btn-secondary:hover { background-color: #e2e8f0; }
     .btn-primary { background-color: var(--accent-sky); color: #ffffff; }
     .btn-primary:hover { background-color: var(--accent-sky-hover); }
 
-    .toolbar { background-color: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 1rem; display: grid; grid-template-columns: 2.2fr 1fr 1.2fr 1fr; gap: 1.25rem; align-items: flex-end; }
+    .toolbar { background-color: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 1rem; display: grid; grid-template-columns: 2fr 1fr 1.2fr 1fr 1.2fr; gap: 1rem; align-items: flex-end; }
     .control-group { display: flex; flex-direction: column; gap: 0.375rem; }
     .control-group label { font-size: 0.75rem; font-weight: 700; }
     .file-inputs { display: flex; gap: 0.75rem; }
@@ -112,6 +113,7 @@
       </div>
 
       <button id="btn-run" class="btn btn-primary" style="height: 38px;">Re-Run Benchmark</button>
+      <button id="btn-export-snapshot" class="btn btn-secondary" style="height: 38px; background-color: #059669; color: #ffffff; border-color: #047857;">Export Grid Snapshot</button>
     </div>
 
     <div class="grid-container" id="grid-3d"></div>
@@ -539,7 +541,7 @@
         const camera = new THREE.PerspectiveCamera(45, rect.width / rect.height, 0.1, 100);
         camera.position.set(0, 0, 3.5);
 
-        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
         renderer.setSize(rect.width, rect.height, false);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
@@ -731,10 +733,52 @@
       else reader.readAsText(file);
     }
 
+    // Export High-Resolution Grid Snapshot (Mesh Only, Clean Canvas, Native Quality)
+    function exportGridSnapshot() {
+      const cols = 4;
+      const rows = 3;
+
+      // Determine dimensions based on full canvas pixel resolutions
+      const singleCanvas = renderers[0].domElement;
+      const singleWidth = singleCanvas.width;
+      const singleHeight = singleCanvas.height;
+
+      const exportCanvas = document.createElement("canvas");
+      exportCanvas.width = singleWidth * cols;
+      exportCanvas.height = singleHeight * rows;
+      const ctx = exportCanvas.getContext("2d");
+
+      // Fill Background
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+
+      // Force high-res re-render for all scenes
+      renderers.forEach((r, idx) => {
+        r.render(scenes[idx], cameras[idx]);
+        const rCanvas = r.domElement;
+
+        const c = idx % cols;
+        const row = Math.floor(idx / cols);
+
+        ctx.drawImage(
+          rCanvas,
+          0, 0, singleWidth, singleHeight,
+          c * singleWidth, row * singleHeight, singleWidth, singleHeight
+        );
+      });
+
+      // Trigger automatic image download
+      const link = document.createElement("a");
+      link.download = `denoising_benchmark_grid_snapshot_${Date.now()}.png`;
+      link.href = exportCanvas.toDataURL("image/png", 1.0);
+      link.click();
+    }
+
     // Event Listeners
     document.getElementById("file-orig").addEventListener("change", (e) => loadFile(e.target.files[0], true));
     document.getElementById("file-noisy").addEventListener("change", (e) => loadFile(e.target.files[0], false));
     document.getElementById("btn-run").addEventListener("click", runBenchmark);
+    document.getElementById("btn-export-snapshot").addEventListener("click", exportGridSnapshot);
     document.getElementById("iter-slider").addEventListener("input", (e) => {
       document.getElementById("iter-val").innerText = e.target.value;
     });
