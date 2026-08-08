@@ -1,329 +1,236 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Full 12-Method 3D Mesh Denoising Benchmark</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Mesh Denoising Benchmark & Viewer</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
   <!-- Three.js + OrbitControls + PLYExporter -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/PLYExporter.js"></script>
-  
+
   <style>
-    :root {
-      --bg: #0f172a;
-      --card-bg: #1e293b;
-      --accent: #38bdf8;
-      --text: #f8fafc;
-      --text-dim: #94a3b8;
-      --border: #334155;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      overflow: hidden;
+      margin: 0;
+      background-color: #090d16;
+      color: #f8fafc;
+      font-family: system-ui, -apple-system, sans-serif;
     }
-    header {
-      padding: 12px 24px;
-      background: var(--card-bg);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    h1 { font-size: 1.1rem; font-weight: 600; color: var(--accent); }
-    
-    .container {
-      display: flex;
-      flex: 1;
-      height: calc(100vh - 55px);
-    }
-    .sidebar {
-      width: 360px;
-      background: var(--card-bg);
-      border-right: 1px solid var(--border);
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      overflow-y: auto;
-    }
-    .main-view {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      position: relative;
-    }
+
     .viewport-container {
-      flex: 1;
       position: relative;
-      background: #020617;
-    }
-    #canvas3d { width: 100%; height: 100%; display: block; }
-    
-    .panel-block {
-      background: var(--bg);
-      padding: 12px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-    }
-    .panel-title {
-      font-size: 0.85rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--text-dim);
-      margin-bottom: 10px;
-    }
-    label { display: block; font-size: 0.85rem; margin-bottom: 4px; }
-    input[type="file"], select, input[type="range"], input[type="number"] {
       width: 100%;
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 6px 8px;
-      border-radius: 4px;
-      font-size: 0.85rem;
-      margin-bottom: 8px;
+      height: 520px;
+      background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+      border-radius: 0.75rem;
+      overflow: hidden;
+      border: 1px solid #334155;
     }
-    .range-group { display: flex; align-items: center; gap: 8px; }
-    .btn {
-      width: 100%;
-      background: #0284c7;
-      color: white;
-      border: none;
-      padding: 10px;
-      border-radius: 6px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    .btn:hover { background: #0369a1; }
-    .btn:disabled { background: #334155; opacity: 0.6; cursor: not-allowed; }
-    .btn-secondary { background: #334155; margin-top: 6px; }
-    .btn-secondary:hover { background: #475569; }
 
-    .metrics-panel {
-      height: 320px;
-      background: var(--card-bg);
-      border-top: 1px solid var(--border);
-      padding: 12px;
-      overflow: auto;
-    }
-    table {
+    canvas {
       width: 100%;
-      border-collapse: collapse;
-      font-size: 0.8rem;
-      text-align: left;
+      height: 100%;
+      display: block;
     }
-    th, td {
-      padding: 6px 10px;
-      border-bottom: 1px solid var(--border);
-    }
-    th {
-      background: var(--bg);
-      color: var(--accent);
-      position: sticky;
-      top: 0;
-    }
-    tr.selected { background: #0369a140; font-weight: bold; }
-    tr.highlight-proposed { border-left: 3px solid var(--accent); }
 
-    .color-legend {
+    tr.highlight-proposed {
+      background-color: rgba(16, 185, 129, 0.15) !important;
+      border-left: 4px solid #10b981;
+    }
+
+    tr.selected {
+      background-color: rgba(56, 189, 248, 0.2) !important;
+    }
+
+    .progress-overlay {
+      display: none;
       position: absolute;
-      top: 16px;
-      right: 16px;
+      inset: 0;
       background: rgba(15, 23, 42, 0.85);
       backdrop-filter: blur(4px);
-      padding: 10px;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      width: 140px;
-      font-size: 0.75rem;
-    }
-    .gradient-bar {
-      height: 12px;
-      border-radius: 3px;
-      background: linear-gradient(to right, blue, cyan, green, yellow, red);
-      margin: 6px 0;
-    }
-    .legend-labels { display: flex; justify-content: space-between; color: var(--text-dim); }
-
-    /* Progress Overlay Modal */
-    .progress-overlay {
-      position: absolute;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(2, 6, 23, 0.85);
-      backdrop-filter: blur(8px);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
+      z-index: 20;
       align-items: center;
-      z-index: 100;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.3s ease;
+      justify-content: center;
+      flex-direction: column;
     }
+
     .progress-overlay.active {
-      opacity: 1;
-      pointer-events: all;
-    }
-    .progress-box {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      padding: 24px;
-      border-radius: 12px;
-      width: 380px;
-      text-align: center;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-    }
-    .progress-title {
-      font-weight: 600;
-      font-size: 1rem;
-      margin-bottom: 6px;
-      color: var(--accent);
-    }
-    .progress-status {
-      font-size: 0.85rem;
-      color: var(--text-dim);
-      margin-bottom: 16px;
-    }
-    .progress-bar-bg {
-      width: 100%;
-      height: 10px;
-      background: var(--bg);
-      border-radius: 5px;
-      overflow: hidden;
-      margin-bottom: 10px;
-      border: 1px solid var(--border);
-    }
-    .progress-bar-fill {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, #0284c7, #38bdf8);
-      transition: width 0.2s ease;
-    }
-    .progress-meta {
       display: flex;
-      justify-content: space-between;
-      font-size: 0.75rem;
-      color: var(--text-dim);
     }
   </style>
 </head>
-<body>
+<body class="p-6">
 
-  <header>
-    <h1>3D Mesh Denoising Benchmark (12 Methods)</h1>
-    <span id="mesh-info" style="font-size: 0.8rem; color: var(--text-dim);">Load meshes to start</span>
-  </header>
+  <div class="max-w-7xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <header class="flex justify-between items-center pb-4 border-b border-slate-800">
+      <div>
+        <h1 class="text-2xl font-bold text-sky-400">3D Mesh Denoising Benchmark Suite</h1>
+        <p class="text-sm text-slate-400">Evaluate 12 Geometry Denoising Algorithms in Real-Time</p>
+      </div>
+      <div id="mesh-info" class="text-xs bg-slate-800 px-3 py-2 rounded-lg border border-slate-700 text-slate-300">
+        Default Synthetic Mesh: 578 vertices, 1152 faces
+      </div>
+    </header>
 
-  <div class="container">
-    <div class="sidebar">
-      <div class="panel-block">
-        <div class="panel-title">1. Input Meshes</div>
-        <label>Original (Clean) Mesh (.obj, .off, .stl)</label>
-        <input type="file" id="file-orig" accept=".obj,.off,.stl">
+    <!-- Top Layout: Controls & Viewport -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <!-- Left Panel: Upload & Benchmark Parameters -->
+      <div class="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-5">
         
-        <label>Noisy Mesh (.obj, .off, .stl)</label>
-        <input type="file" id="file-noisy" accept=".obj,.off,.stl">
-      </div>
+        <h2 class="text-lg font-semibold text-slate-200 border-b border-slate-800 pb-2">1. Input Configuration</h2>
+        
+        <!-- File Inputs -->
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Original Mesh (Clean Reference)</label>
+            <input type="file" id="file-orig" accept=".obj,.off,.stl" class="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-sky-400 hover:file:bg-slate-700 cursor-pointer" />
+          </div>
 
-      <div class="panel-block">
-        <div class="panel-title">2. Algorithm Settings</div>
-        <label>Active View Method</label>
-        <select id="method-select">
-          <option value="8">8. Proposed (MultiRing Adaptive)</option>
-          <option value="1">1. Laplacian Smoothing</option>
-          <option value="2">2. Taubin Anti-Shrink</option>
-          <option value="3">3. Bilateral Mesh Filter</option>
-          <option value="4">4. Mean Curvature Flow (MCF)</option>
-          <option value="5">5. Tangential Smoothing</option>
-          <option value="6">6. Anisotropic Denoising</option>
-          <option value="7">7. TPS (Tangent Plane)</option>
-          <option value="9">9. Sun Trimmed Normal</option>
-          <option value="10">10. Guided Normal Filter</option>
-          <option value="11">11. L0 Sparse Optimization</option>
-          <option value="12">12. Median Normal Filter</option>
-        </select>
-
-        <label>Iterations (<span id="iter-val">3</span> rounds):</label>
-        <div class="range-group">
-          <input type="range" id="iter-slider" min="1" max="50" value="3">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Noisy Mesh (To Denoise)</label>
+            <input type="file" id="file-noisy" accept=".obj,.off,.stl" class="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-sky-400 hover:file:bg-slate-700 cursor-pointer" />
+          </div>
         </div>
 
-        <label>MultiRing Ring Weights (c, b, a):</label>
-        <div style="display:flex; gap:4px;">
-          <input type="number" id="w-c" value="0.85" step="0.05" title="Ring 1 weight (c)">
-          <input type="number" id="w-b" value="0.12" step="0.05" title="Ring 2 weight (b)">
-          <input type="number" id="w-a" value="0.03" step="0.05" title="Ring 3 weight (a)">
+        <h2 class="text-lg font-semibold text-slate-200 border-b border-slate-800 pb-2">2. Parameters</h2>
+
+        <!-- Iterations Slider -->
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-slate-400">Filter Iterations</span>
+            <span id="iter-val" class="text-sky-400 font-mono">5</span>
+          </div>
+          <input type="range" id="iter-slider" min="1" max="20" value="5" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-400" />
         </div>
+
+        <!-- Proposed MultiRing Weights -->
+        <div class="space-y-2">
+          <label class="block text-xs font-medium text-slate-400">MultiRing Weights (Ring 3, 2, 1)</label>
+          <div class="grid grid-cols-3 gap-2">
+            <input type="number" id="w-a" value="0.2" step="0.05" class="bg-slate-800 border border-slate-700 text-xs text-center text-slate-200 rounded py-1" title="Ring 3 Weight (a)" />
+            <input type="number" id="w-b" value="0.3" step="0.05" class="bg-slate-800 border border-slate-700 text-xs text-center text-slate-200 rounded py-1" title="Ring 2 Weight (b)" />
+            <input type="number" id="w-c" value="0.5" step="0.05" class="bg-slate-800 border border-slate-700 text-xs text-center text-slate-200 rounded py-1" title="Ring 1 Weight (c)" />
+          </div>
+        </div>
+
+        <!-- Run Button -->
+        <button id="btn-run" class="w-full py-2.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-sm rounded-lg shadow-lg shadow-sky-500/20 transition">
+          Run Denoising Benchmark (12 Methods)
+        </button>
+
       </div>
 
-      <div class="panel-block">
-        <div class="panel-title">3. Display & Export</div>
-        <label><input type="checkbox" id="chk-colormap" checked> Color-map Displacement Error</label>
-        <label><input type="checkbox" id="chk-wireframe"> Show Wireframe</label>
-        <button class="btn" id="btn-run">Run All 12 Methods Benchmark</button>
-        <button class="btn btn-secondary" id="btn-export">Export Displacement PLY</button>
+      <!-- Right Panel: 3D Viewport -->
+      <div class="lg:col-span-2 space-y-3">
+        
+        <div class="viewport-container">
+          
+          <!-- Benchmark Loading Overlay -->
+          <div id="progress-overlay" class="progress-overlay">
+            <div class="w-3/4 max-w-md space-y-3 text-center">
+              <div class="text-sky-400 font-bold text-lg" id="progress-status">Processing Benchmark...</div>
+              <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden border border-slate-700">
+                <div id="progress-bar" class="bg-sky-400 h-full w-0 transition-all duration-150"></div>
+              </div>
+              <div class="flex justify-between text-xs text-slate-400 font-mono">
+                <span id="progress-step">0 / 12 Complete</span>
+                <span id="progress-percent">0%</span>
+              </div>
+            </div>
+          </div>
+
+          <canvas id="canvas3d"></canvas>
+        </div>
+
+        <!-- Viewport Controls Toolbar -->
+        <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl flex flex-wrap gap-4 justify-between items-center">
+          
+          <div class="flex items-center gap-4">
+            <label class="block text-xs font-medium text-slate-400">Active Method View:</label>
+            <select id="method-select" class="bg-slate-800 border border-slate-700 text-xs text-sky-400 rounded py-1 px-3">
+              <option value="1">1. Laplacian Smoothing</option>
+              <option value="2">2. Taubin Filter</option>
+              <option value="3">3. Bilateral Mesh Denoising</option>
+              <option value="4">4. Mean Curvature Flow (MCF)</option>
+              <option value="5">5. Tangential Smoothing</option>
+              <option value="6">6. Anisotropic Diffusion</option>
+              <option value="7">7. Thin Plate Spline (TPS)</option>
+              <option value="8" selected>8. Proposed (MultiRing Adaptive)</option>
+              <option value="9">9. Sun Trimmed Median Filter</option>
+              <option value="10">10. Guided Normal Filtering</option>
+              <option value="11">11. L0 Sparse Regularization</option>
+              <option value="12">12. Median Normal Filtering</option>
+            </select>
+          </div>
+
+          <div class="flex items-center gap-4 text-xs">
+            <label class="flex items-center gap-1.5 cursor-pointer text-slate-300">
+              <input type="checkbox" id="chk-wireframe" class="rounded bg-slate-800 border-slate-700 text-sky-500 focus:ring-0" />
+              Wireframe
+            </label>
+
+            <label class="flex items-center gap-1.5 cursor-pointer text-slate-300">
+              <input type="checkbox" id="chk-colormap" checked class="rounded bg-slate-800 border-slate-700 text-sky-500 focus:ring-0" />
+              Error Heatmap
+            </label>
+
+            <span class="text-slate-500">|</span>
+            
+            <span class="text-slate-400">Max Error: <span id="max-err-text" class="font-mono text-sky-400">0.0000</span></span>
+
+            <button id="btn-export" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-3 py-1 rounded text-xs transition">
+              Export PLY
+            </button>
+          </div>
+
+        </div>
+
       </div>
+
     </div>
 
-    <div class="main-view">
-      <div class="viewport-container">
-        <!-- Progress Overlay Modal -->
-        <div class="progress-overlay" id="progress-overlay">
-          <div class="progress-box">
-            <div class="progress-title">Running Benchmark</div>
-            <div class="progress-status" id="progress-status">Initializing calculations...</div>
-            <div class="progress-bar-bg">
-              <div class="progress-bar-fill" id="progress-bar"></div>
-            </div>
-            <div class="progress-meta">
-              <span id="progress-step">0 / 12 Methods</span>
-              <span id="progress-percent">0%</span>
-            </div>
-          </div>
-        </div>
-
-        <canvas id="canvas3d"></canvas>
-        <div class="color-legend" id="legend">
-          <div>Displacement Error</div>
-          <div class="gradient-bar"></div>
-          <div class="legend-labels">
-            <span>0.0 (Min)</span>
-            <span id="max-err-text">Max</span>
-          </div>
-        </div>
+    <!-- Benchmark Results Table -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-800 flex justify-between items-center">
+        <h2 class="text-lg font-semibold text-slate-200">Evaluation Metrics</h2>
+        <span class="text-xs text-slate-400">Sorted by Composite Quality Score</span>
       </div>
-
-      <div class="metrics-panel">
-        <div class="panel-title">Evaluation Metrics & Rankings (Sorted by Overall Composite Score)</div>
-        <table id="metrics-table">
-          <thead>
+      
+      <div class="overflow-x-auto">
+        <table id="metrics-table" class="w-full text-left text-xs text-slate-300">
+          <thead class="bg-slate-950 text-slate-400 font-mono uppercase text-[10px] tracking-wider border-b border-slate-800">
             <tr>
-              <th>Rank</th>
-              <th>Method</th>
-              <th>RMSE ↓</th>
-              <th>Chamfer ↓</th>
-              <th>Hausdorff ↓</th>
-              <th>AVG Δθ (°) ↓</th>
-              <th>Time (s) ↓</th>
-              <th>Iters</th>
+              <th class="p-3">Rank</th>
+              <th class="p-3">Algorithm</th>
+              <th class="p-3">RMSE</th>
+              <th class="p-3">Chamfer Dist</th>
+              <th class="p-3">Hausdorff Dist</th>
+              <th class="p-3">Normal Angle Err</th>
+              <th class="p-3">Exec Time</th>
+              <th class="p-3">Iterations</th>
             </tr>
           </thead>
-          <tbody>
-            <tr><td colspan="8" style="text-align:center; color: var(--text-dim);">Click 'Run All 12 Methods Benchmark' to calculate results across all 12 algorithms.</td></tr>
+          <tbody class="divide-y divide-slate-800/50 font-mono">
+            <tr>
+              <td colspan="8" class="p-4 text-center text-slate-500 font-sans">
+                Click "Run Denoising Benchmark" to calculate comparative metrics for all 12 algorithms.
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
     </div>
+
   </div>
 
+  <!-- JavaScript Logic -->
   <script>
     let scene, camera, renderer, controls, meshObject;
     let origPositions = null;
@@ -351,10 +258,10 @@
       const canvas = document.getElementById('canvas3d');
 
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x020617);
+      scene.background = new THREE.Color(0x0f172a);
 
-      camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-      camera.position.set(0, 0, 3);
+      camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.01, 10000);
+      camera.position.set(0, 0, 5);
 
       renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
       renderer.setSize(container.clientWidth, container.clientHeight);
@@ -363,11 +270,15 @@
       controls = new THREE.OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
 
-      const light1 = new THREE.DirectionalLight(0xffffff, 1.0);
-      light1.position.set(1, 1, 1);
-      const light2 = new THREE.DirectionalLight(0xffffff, 0.5);
-      light2.position.set(-1, -1, -1);
-      scene.add(light1, light2, new THREE.AmbientLight(0x404040, 0.6));
+      // Bright multi-directional lighting setup
+      const light1 = new THREE.DirectionalLight(0xffffff, 1.2);
+      light1.position.set(1, 2, 3);
+      const light2 = new THREE.DirectionalLight(0xffffff, 0.8);
+      light2.position.set(-1, -2, -3);
+      const light3 = new THREE.DirectionalLight(0xffffff, 0.5);
+      light3.position.set(0, 3, 0);
+
+      scene.add(light1, light2, light3, new THREE.AmbientLight(0xffffff, 0.8));
 
       window.addEventListener('resize', () => {
         camera.aspect = container.clientWidth / container.clientHeight;
@@ -394,7 +305,7 @@
       const geom = new THREE.SphereGeometry(1, 24, 24);
       origPositions = new Float32Array(geom.attributes.position.array);
       noisyPositions = new Float32Array(origPositions.length);
-      meshIndices = geom.index.array;
+      meshIndices = new Uint32Array(geom.index.array);
 
       for(let i = 0; i < origPositions.length; i += 3) {
         let noise = (Math.random() - 0.5) * 0.08;
@@ -443,7 +354,7 @@
         meshIndices = parsed.indices;
       }
       if (origPositions && noisyPositions) {
-        document.getElementById('mesh-info').innerText = `${fileName}: ${origPositions.length/3} Vertices, ${meshIndices.length/3} Faces`;
+        document.getElementById('mesh-info').innerText = `${fileName}: ${origPositions.length/3} Vertices, ${meshIndices ? meshIndices.length/3 : 0} Faces`;
         renderMesh(noisyPositions);
       }
     }
@@ -506,7 +417,7 @@
       return { positions: pos, indices: idx };
     }
 
-    // --- Parser 3: STL (ASCII & Binary) + Vertex Deduplication ---
+    // --- Parser 3: STL (ASCII & Binary) ---
     function parseSTL(buffer) {
       const dataView = new DataView(buffer);
       const isBinary = dataView.getUint32(80, true) * 50 + 84 === buffer.byteLength;
@@ -516,7 +427,7 @@
       if (isBinary) {
         const numTriangles = dataView.getUint32(80, true);
         for (let i = 0; i < numTriangles; i++) {
-          const offset = 84 + i * 50 + 12; // Skip normal vector
+          const offset = 84 + i * 50 + 12;
           for (let v = 0; v < 3; v++) {
             rawVertices.push(
               dataView.getFloat32(offset + v * 12, true),
@@ -536,7 +447,6 @@
         }
       }
 
-      // Deduplicate STL vertices to reconstruct topological adjacency
       const vertexMap = new Map();
       const uniquePositions = [];
       const indices = [];
@@ -592,39 +502,73 @@
       geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     }
 
+    // Automatically Recenter and Scale Camera onto Active Mesh
+    function fitCameraToMesh(geometry) {
+      geometry.computeBoundingSphere();
+      const sphere = geometry.boundingSphere;
+
+      if (!sphere || isNaN(sphere.radius) || sphere.radius === 0) return;
+
+      const radius = sphere.radius;
+      const center = sphere.center;
+
+      controls.target.copy(center);
+
+      const fov = camera.fov * (Math.PI / 180);
+      let distance = Math.abs(radius / Math.sin(fov / 2)) * 1.5;
+
+      camera.position.set(center.x, center.y, center.z + distance);
+      camera.near = distance / 100;
+      camera.far = distance * 100;
+      camera.updateProjectionMatrix();
+      controls.update();
+    }
+
     function renderMesh(positions, colorMapped = false) {
+      if (!positions || positions.length === 0) return;
+
       if (meshObject) scene.remove(meshObject);
 
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
-      if (meshIndices) geometry.setIndex(new THREE.BufferAttribute(meshIndices, 1));
-      
-      if (colorMapped && origPositions) {
+      if (meshIndices && meshIndices.length > 0) {
+        geometry.setIndex(new THREE.BufferAttribute(meshIndices, 1));
+      }
+
+      const useColormap = document.getElementById('chk-colormap').checked && colorMapped && origPositions;
+      if (useColormap) {
         applyColorMapping(geometry, positions, origPositions);
       }
+      
       geometry.computeVertexNormals();
 
-      const useColormap = document.getElementById('chk-colormap').checked && colorMapped;
       const material = new THREE.MeshStandardMaterial({
         vertexColors: useColormap,
         color: useColormap ? 0xffffff : 0x38bdf8,
         wireframe: document.getElementById('chk-wireframe').checked,
-        roughness: 0.4,
-        metalness: 0.2
+        roughness: 0.3,
+        metalness: 0.1,
+        side: THREE.DoubleSide
       });
 
       meshObject = new THREE.Mesh(geometry, material);
       scene.add(meshObject);
+
+      fitCameraToMesh(geometry);
     }
 
     function buildAdjacency(N, indices) {
       const adj = Array.from({ length: N }, () => []);
+      if (!indices || indices.length === 0) return adj;
+
       const setAdj = Array.from({ length: N }, () => new Set());
       for (let i = 0; i < indices.length; i += 3) {
         const u = indices[i], v = indices[i+1], w = indices[i+2];
-        setAdj[u].add(v); setAdj[u].add(w);
-        setAdj[v].add(u); setAdj[v].add(w);
-        setAdj[w].add(u); setAdj[w].add(v);
+        if (u < N && v < N && w < N) {
+          setAdj[u].add(v); setAdj[u].add(w);
+          setAdj[v].add(u); setAdj[v].add(w);
+          setAdj[w].add(u); setAdj[w].add(v);
+        }
       }
       for (let i = 0; i < N; i++) adj[i] = Array.from(setAdj[i]);
       return adj;
@@ -818,7 +762,7 @@
       return curr;
     }
 
-    // --- Asynchronous Benchmark Execution with Dynamic UI Progress Updates ---
+    // Benchmark Run Trigger
     document.getElementById('btn-run').addEventListener('click', async () => {
       if (!noisyPositions || !origPositions) return alert("Please upload both meshes first!");
 
@@ -829,7 +773,6 @@
       const pStep = document.getElementById('progress-step');
       const pPercent = document.getElementById('progress-percent');
 
-      // Lock UI & Show Overlay
       btn.disabled = true;
       overlay.classList.add('active');
 
@@ -846,14 +789,12 @@
       for (let id = 1; id <= TOTAL_METHODS; id++) {
         const methodName = METHOD_NAMES[id];
         
-        // Update Progress UI
         pStatus.innerText = `Processing Method ${id}/12: ${methodName}...`;
         pStep.innerText = `${id - 1} / ${TOTAL_METHODS} Complete`;
         const pct = Math.round(((id - 1) / TOTAL_METHODS) * 100);
         pPercent.innerText = `${pct}%`;
         pBar.style.width = `${pct}%`;
 
-        // Yield to DOM renderer to repaint the progress bar
         await new Promise(resolve => setTimeout(resolve, 50));
 
         const t0 = performance.now();
@@ -862,7 +803,6 @@
 
         methodOutputs[id] = denoised;
 
-        // Metrics Calculation
         let sumSqErr = 0, maxErr = 0;
         const N = origPositions.length / 3;
         for (let i = 0; i < N; i++) {
@@ -893,7 +833,6 @@
         });
       }
 
-      // Finish Progress
       pStatus.innerText = "Finalizing benchmark table...";
       pStep.innerText = `12 / 12 Complete`;
       pPercent.innerText = `100%`;
@@ -901,14 +840,11 @@
 
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      // Sort by Composite Ranking
       results.sort((a, b) => a.score - b.score);
 
-      // Render Active Selected Method in 3D Viewport
       const activeId = parseInt(document.getElementById('method-select').value);
       renderMesh(methodOutputs[activeId], true);
 
-      // Render Full 12-Method Benchmark Ranking Table
       const tableBody = document.querySelector('#metrics-table tbody');
       tableBody.innerHTML = '';
 
@@ -930,12 +866,10 @@
         tableBody.appendChild(tr);
       });
 
-      // Hide Overlay & Unlock UI
       overlay.classList.remove('active');
       btn.disabled = false;
     });
 
-    // Handle Active Method Switch
     document.getElementById('method-select').addEventListener('change', (e) => {
       const activeId = parseInt(e.target.value);
       if (methodOutputs[activeId]) {
@@ -943,7 +877,16 @@
       }
     });
 
-    // Export Color-Mapped PLY File
+    document.getElementById('chk-wireframe').addEventListener('change', () => {
+      const activeId = parseInt(document.getElementById('method-select').value);
+      renderMesh(methodOutputs[activeId] || noisyPositions, true);
+    });
+
+    document.getElementById('chk-colormap').addEventListener('change', () => {
+      const activeId = parseInt(document.getElementById('method-select').value);
+      renderMesh(methodOutputs[activeId] || noisyPositions, true);
+    });
+
     document.getElementById('btn-export').addEventListener('click', () => {
       if (!meshObject) return;
       const exporter = new THREE.PLYExporter();
