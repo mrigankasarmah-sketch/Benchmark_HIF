@@ -56,11 +56,7 @@
     .controls-left { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem; flex: 1; }
     .control-group { display: flex; flex-direction: column; gap: 0.25rem; }
     .control-label { font-size: 0.75rem; font-weight: 500; color: #94a3b8; }
-    .file-input {
-      font-size: 0.75rem;
-      color: #94a3b8;
-      cursor: pointer;
-    }
+    .file-input { font-size: 0.75rem; color: #94a3b8; cursor: pointer; }
     .slider-box { width: 10rem; }
     .slider-header { display: flex; justify-content: space-between; font-size: 0.75rem; }
     .slider-header span:last-child { color: #38bdf8; font-family: monospace; }
@@ -166,7 +162,7 @@
     tbody tr { border-bottom: 1px solid rgba(30, 41, 59, 0.5); }
     td { padding: 0.75rem; }
     tr.highlight-proposed { background-color: rgba(16, 185, 129, 0.12) !important; border-left: 4px solid #10b981; }
-    .best-metric { color: #34d399 !important; font-weight: 700 !important; background-color: rgba(6, 78, 59, 0.4); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .best-metric { color: #34d399 !important; font-weight: 700 !important; background-color: rgba(6, 78, 59, 0.4); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(16, 185, 129, 0.3); inline-size: max-content; display: inline-block; }
   </style>
 </head>
 <body>
@@ -242,7 +238,7 @@
       <div class="table-header-box">
         <div>
           <h2 class="table-title">Comparative Geometric Metrics Table</h2>
-          <div class="table-subtitle">Green highlighted values represent the best result across algorithms.</div>
+          <div class="table-subtitle">Green highlighted values represent the top performing result for each respective metric column.</div>
         </div>
         <button id="btn-export" class="btn-secondary">Export Selected Mesh (PLY)</button>
       </div>
@@ -302,7 +298,6 @@
     let selectedMethodId = 14;
     let isSyncingCameras = false;
 
-    // Iteration slider binding
     const iterSlider = document.getElementById('iter-slider');
     const iterVal = document.getElementById('iter-val');
     iterSlider.addEventListener('input', (e) => {
@@ -574,7 +569,6 @@
       return setAdj.map(s => Array.from(s));
     }
 
-    // Dynamic Computation of Triangle Metrics
     function computeMeshTriangleMetrics(pos, indices) {
       if (!indices || indices.length < 3) {
         return { aspectRatio: 1.0, triangleRatio: 1.0, areaVariance: 0.0 };
@@ -593,7 +587,6 @@
         const bx = pos[i1], by = pos[i1+1], bz = pos[i1+2];
         const cx = pos[i2], cy = pos[i2+1], cz = pos[i2+2];
 
-        // Edge lengths
         const a = Math.hypot(bx - cx, by - cy, bz - cz);
         const b = Math.hypot(ax - cx, ay - cy, az - cz);
         const c = Math.hypot(ax - bx, ay - by, az - bz);
@@ -604,12 +597,10 @@
         areas[t] = area;
         sumArea += area;
 
-        // Triangle Aspect Ratio
         const maxEdge = Math.max(a, b, c);
         const minEdge = Math.min(a, b, c) || 0.00001;
         totalAR += (maxEdge / minEdge);
 
-        // Triangle Quality Ratio (2 * inradius / circumradius)
         const inradius = area / (s || 1);
         const circumradius = (a * b * c) / (4 * area || 1);
         totalTR += circumradius > 0 ? (2 * inradius / circumradius) : 1;
@@ -722,7 +713,6 @@
         const badge = document.getElementById(`badge-rmse-${id}`);
         if(badge) badge.innerText = `RMSE: ${rmse.toFixed(5)}`;
 
-        // Dynamic computation of mesh quality metrics per algorithm
         const geomMetrics = computeMeshTriangleMetrics(denoised, meshIndices);
 
         results.push({ 
@@ -745,20 +735,43 @@
       await new Promise(r => setTimeout(r, 50));
       
       results.sort((a, b) => a.rmse - b.rmse);
+
+      // Compute optimal values for every column across all results
+      const bestRmse = Math.min(...results.map(r => r.rmse));
+      const bestPsnr = Math.max(...results.map(r => r.psnr));
+      const bestChamfer = Math.min(...results.map(r => r.chamfer));
+      const bestHausdorff = Math.min(...results.map(r => r.hausdorff));
+      const bestAngle = Math.min(...results.map(r => r.angle));
+      // Aspect ratio optimal when closest to 1.0
+      const bestAr = results.reduce((prev, curr) => Math.abs(curr.ar - 1) < Math.abs(prev.ar - 1) ? curr : prev).ar;
+      const bestTr = Math.max(...results.map(r => r.tr));
+      const bestVar = Math.min(...results.map(r => r.var));
+      const bestTime = Math.min(...results.map(r => r.time));
+
       const tbody = document.querySelector('#metrics-table tbody');
       tbody.innerHTML = '';
       
       results.forEach((res, rank) => {
-        const isBestRmse = rank === 0;
         const tr = document.createElement('tr');
         if (res.id === 14) tr.classList.add('highlight-proposed');
+
+        const fmt = (val, bestVal, digits, suffix = '') => {
+          const isBest = val === bestVal;
+          return `<span class="${isBest ? 'best-metric' : ''}">${val.toFixed(digits)}${suffix}</span>`;
+        };
+
         tr.innerHTML = `
-          <td>#${rank + 1}</td><td>${res.name}</td>
-          <td><span class="${isBestRmse ? 'best-metric' : ''}">${res.rmse.toFixed(6)}</span></td>
-          <td>${res.psnr.toFixed(2)} dB</td><td>${res.chamfer.toFixed(6)}</td>
-          <td>${res.hausdorff.toFixed(6)}</td><td>${res.angle.toFixed(2)}°</td>
-          <td>${res.ar.toFixed(3)}</td><td>${res.tr.toFixed(3)}</td>
-          <td>${res.var.toFixed(6)}</td><td>${res.time.toFixed(4)}s</td>
+          <td>#${rank + 1}</td>
+          <td>${res.name}</td>
+          <td>${fmt(res.rmse, bestRmse, 6)}</td>
+          <td>${fmt(res.psnr, bestPsnr, 2, ' dB')}</td>
+          <td>${fmt(res.chamfer, bestChamfer, 6)}</td>
+          <td>${fmt(res.hausdorff, bestHausdorff, 6)}</td>
+          <td>${fmt(res.angle, bestAngle, 2, '°')}</td>
+          <td>${fmt(res.ar, bestAr, 3)}</td>
+          <td>${fmt(res.tr, bestTr, 3)}</td>
+          <td>${fmt(res.var, bestVar, 6)}</td>
+          <td>${fmt(res.time, bestTime, 4, 's')}</td>
         `;
         tbody.appendChild(tr);
       });
@@ -786,7 +799,6 @@
       }, { binary: true });
     });
 
-    // Initialize layout and default synthetic sphere
     initGrid();
     createSyntheticSphere();
   </script>
