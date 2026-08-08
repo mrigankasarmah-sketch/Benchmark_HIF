@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Mesh Denoising Multi-View Comparative Grid (4x3)</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Three.js + OrbitControls + PLYExporter -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/PLYExporter.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      background-color: #ffffff;
+      color: #0f172a;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    /* 4x3 Seamless Grid Container */
+    .grid-container {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 0px; /* Zero margins/gap for paper publication styling */
+      border: 1px solid #cbd5e1;
+      background-color: #ffffff;
+      border-radius: 0.5rem;
+      overflow: hidden;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+
+    .grid-item {
+      position: relative;
+      height: 260px;
+      border: 1px solid #e2e8f0;
+      background-color: #ffffff;
+      margin: -0.5px; /* Overlap borders cleanly */
+    }
+
+    .grid-item canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .grid-item-header {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      right: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .grid-item-title {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(4px);
+      color: #0f172a;
+      font-weight: 700;
+      font-size: 0.7rem;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid #cbd5e1;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+
+    .grid-item-title.proposed {
+      background: #10b981;
+      color: #ffffff;
+      border-color: #059669;
+    }
+
+    tr.highlight-proposed {
+      background-color: rgba(16, 185, 129, 0.08) !important;
+      border-left: 4px solid #10b981;
+    }
+
+    .progress-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(4px);
+      z-index: 50;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
+
+    .progress-overlay.active {
+      display: flex;
+    }
+  </style>
+</head>
+<body class="p-6 bg-slate-50 text-slate-900">
+
+  <div class="max-w-[1680px] mx-auto space-y-6">
+    
+    <!-- Header -->
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-center pb-4 border-b border-slate-200 gap-4">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900">3D Mesh Denoising Benchmark Suite</h1>
+        <p class="text-xs text-slate-500">Publication-Ready Synchronized 4x3 Grid (12 Methods, 15 Metrics Evaluation)</p>
+      </div>
+      
+      <!-- Global Controls & Status -->
+      <div class="flex items-center gap-4 flex-wrap">
+        <div id="mesh-info" class="text-xs bg-white px-3 py-1.5 rounded-md border border-slate-200 text-slate-600 font-mono shadow-sm">
+          Mesh: 578 vertices | 1152 faces
+        </div>
+
+        <button id="btn-sync-reset" class="bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 px-3 py-1.5 rounded-md text-xs font-semibold transition">
+          Reset Camera Views
+        </button>
+
+        <button id="btn-export-all" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-4 py-1.5 rounded-md text-xs shadow-sm transition">
+          Export All PLY Models
+        </button>
+      </div>
+    </header>
+
+    <!-- Parameter & Configuration Toolbar -->
+    <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm grid grid-cols-1 md:grid-cols-4 gap-6 items-center">
+      
+      <!-- File Inputs -->
+      <div class="space-y-1.5">
+        <label class="block text-xs font-semibold text-slate-600">Reference / Noisy Files</label>
+        <div class="flex gap-2">
+          <input type="file" id="file-orig" accept=".obj,.off,.stl" class="w-full text-[10px] text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer" />
+          <input type="file" id="file-noisy" accept=".obj,.off,.stl" class="w-full text-[10px] text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer" />
+        </div>
+      </div>
+
+      <!-- Iterations Slider -->
+      <div>
+        <div class="flex justify-between text-xs mb-1 font-semibold text-slate-600">
+          <span>Filter Iterations</span>
+          <span id="iter-val" class="text-sky-600 font-mono">3</span>
+        </div>
+        <input type="range" id="iter-slider" min="1" max="20" value="3" class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-sky-600" />
+      </div>
+
+      <!-- Display Toggles -->
+      <div class="flex items-center gap-6 justify-center">
+        <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+          <input type="checkbox" id="chk-wireframe" class="rounded border-slate-300 text-sky-600 focus:ring-0" />
+          Wireframe Overlay
+        </label>
+
+        <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+          <input type="checkbox" id="chk-colormap" checked class="rounded border-slate-300 text-sky-600 focus:ring-0" />
+          Error Heatmap
+        </label>
+      </div>
+
+      <!-- Action Button -->
+      <button id="btn-run" class="w-full py-2 bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs rounded-lg shadow transition">
+        Re-Run All Benchmark Methods
+      </button>
+
+    </div>
+
+    <!-- Progress Overlay -->
+    <div id="progress-overlay" class="progress-overlay">
+      <div class="w-3/4 max-w-md space-y-3 text-center bg-white p-6 rounded-xl border border-slate-200 shadow-xl">
+        <div class="text-sky-600 font-bold text-base" id="progress-status">Rendering 4x3 Grid Views...</div>
+        <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
+          <div id="progress-bar" class="bg-sky-600 h-full w-0 transition-all duration-150"></div>
+        </div>
+        <div class="flex justify-between text-xs text-slate-500 font-mono">
+          <span id="progress-step">0 / 12 Complete</span>
+          <span id="progress-percent">0%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4x3 Grid Viewports (Publishable White Background, Zero Margin) -->
+    <div class="space-y-2">
+      <div class="flex justify-between items-center px-1">
+        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Synchronized 3D Visual Comparison (4 Columns × 3 Rows)</span>
+        <span class="text-xs text-slate-400">Rotate/Zoom any view to synchronize all 12 viewports simultaneously</span>
+      </div>
+
+      <div class="grid-container" id="grid-3d">
+        
+        <!-- Cell 1 -->
+        <div class="grid-item" data-id="1">
+          <div class="grid-item-header">
+            <span class="grid-item-title">1. Laplacian</span>
+            <span class="text-[10px] font-mono bg-white/90 border border-slate-200 px-1.5 py-0.5 rounded text-slate-600">Err: 0.1799</span>
+          </div>
+          <canvas id="canvas-1"></canvas>
+        </div>
+
+        <!-- Cell 2 -->
+        <div class="grid-item" data-id="2">
+          <div class="grid-item-header">
+            <span class="grid-item-title">2. Taubin</span>
+            <span class="text-[10px] font-mono bg-white/90 border border-slate-200 px-1.5 py-0.5 rounded text-slate-600">Err: 0.1814</span>
+          </div>
+          <canvas id="canvas-2"></canvas>
+        </div>
+
+        <!-- Cell 3 -->
+        <div class="grid-item" data-id="3">
+          <div class="grid-item-header">
+            <span class="grid-item-title">3. Bilateral</span>
+            <span class="text-[10px] font-mono bg-white/90 border border-slate-200 px-1.5 py-0.5 rounded text-slate-600">Err: 0.1857</span>
+          </div>
+          <canvas id="canvas-3"></canvas>
+        </div>
+
+        <!-- Cell 4 -->
+        <div class="grid-item" data-id="4">
+          <div class="grid-item-header">
+            <span class="grid-item-title">4. MCF</span>
+            <span class="text-[10px] font-mono bg-white/90 border border-slate-200 px-1.5 py-0.5 rounded text-slate-600">Err: 0.1884</span>
+          </div>
+          <canvas id="canvas-4"></canvas>
+        </div>
+
+        <!-- Cell 5 -->
+        <div class="grid-item" data-id="5">
+          <div class="grid-item-header">
+            <span class="grid-item-title">5. Tangential</span>
+            <span class="text-[10px] font-mono bg-white/90 border border-slate-200 px-1.5 py-0.5 rounded text-slate-600">Err: 0.1876</span>
+          </div>
+          <canvas id="canvas-5"></canvas>
+        </div>
+
+        <!-- Cell 6 -->
+        <div class="grid-item" data-id="6">
+          <div class="grid-item-header">
+            <span class="grid-item-title">6. Anisotropic</span>
+            <span class="text-[10px] font-mono bg-white/90 border border-slate-200 px-1.5 py-0.5 rounded text-slate-600">Err: 0.1810</span>
+          </div>
+          <canvas id="canvas-6"></canvas>
+        </div>
+
+        <!-- Cell 7 -->
+        <div class="grid-item" data-id="7">
+          <div class="grid-item-header">
+            <span class="grid-item-title">7. TPS</span>
+            <span class="text-[10px] font-mono bg-white/90 border border-slate-200 px-1.5 py-0.5 rounded text-slate-600">Err: 0.1857</span>
+          </div>
+          <canvas id="canvas-7"></canvas>
+        </div>
+
+        <!-- Cell 8: Proposed Method -->
+        <div class="grid-item ring-2 ring-emerald-500 z-10" data-id="8">
+          <div class="grid-item-header">
+            <span class="grid-item-title proposed">8. Proposed (MultiRing)</span>
+            <span class="text-[10px] font-mono bg-emerald-50 text-emerald-700 border border-emerald-300 font-bold px-1.5 py-0.5 rounded">Q_AR: 0.84 ★</span>
+          </div>
+          <canvas id="canvas-8"></canvas>
+        </div>
+
+        <!-- Cell 9 -->
+        <div class="grid-item" data-id="9">
+          <div class="grid-item-header">
+            <span class="grid-item-title">9. Sun Trimmed</span>
+            <span class="text-[10px] font-mono bg-white/90 border border-slate-200 px-1.5 py-0.5 rounded text-slate-600">Err: 0.1905</span>
+          </div>
+          <canvas id="canvas-9"></canvas>
+        </div>
+
+        <!-- Cell 10 -->
+        <div class="grid-item" data-id="10">
+          <div class="grid-item-header">
+            <span class="grid-item-title">10. Guided Normal</span>
+            <span class="text-[10px] font-mono bg-white/90 border border-slate-200 px-1.5 py-0.5 rounded text-slate-600">Err: 0.1897</span>
+          </div>
+          <canvas id="canvas-10"></canvas>
+        </div>
+
+        <!-- Cell 11 -->
+        <div class="grid-item" data-id="11">
+          <div class="grid-item-header">
+            <span class="grid-item-title">11. L0 Sparse</span>
+            <span class="text-[10px]A 4x3 zero-margin grid provides an immediate, publication-ready figure layout for side-by-side qualitative and quantitative evaluations. This layout displays all 12 methods simultaneously against a clean white backdrop, removing visual friction while preserving integrated error heatmaps, synchronized metric overlays, and batch exporting.
+
+<GenerateWidget height="800px">
+
+{/* Reason: Generates a publication-ready 4x3 zero-margin comparative dashboard for 12 evaluation methods with error map toggles, metric overlays, and export utilities. */}
+
+```json
+{
+  "widgetSpec": {
+     "height": "800px",
+     "prompt": "**Objective:** Render a publishable 4x3 zero-margin comparative grid for 12 image/method evaluation results with synchronized error maps and export features.\n **Data State:** 12 methods (GT/Reference, Method 1 through Method 11) with simulated high-resolution sample visual buffers, error maps, and quantitative metrics (PSNR, SSIM, LPIPS, RMSE).\n **Strategy:** Control toolbar at the top (error map toggles, overlay intensity, score visibility, export suite) followed by a seamless 4x3 image grid with zero inner margins on a stark white canvas.\n **Inputs:** Error Heatmap Toggle (Raw Image vs. Residual/Diff Map), Metric Overlay Switch (Show/Hide scores), Export Bar (Export High-Res Grid PNG, Export Metric Table LaTeX/CSV).\n **Visuals/Behavior:** Complete white background (#FFFFFF). The 12 panels fit perfectly in a 4-column by 3-row grid with 0px gap between cells. Minimalist translucent corner badges indicate the method name and key metrics (e.g., PSNR / SSIM) on each cell. Synchronized zooming or side-by-side hover tooltips across all 12 panels. Smooth transition when toggling error heatmaps."
+  }
+}
