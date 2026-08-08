@@ -677,7 +677,7 @@
               let dx = curr[v*3]-curr[i*3], dy = curr[v*3+1]-curr[i*3+1], dz = curr[v*3+2]-curr[i*3+2];
               let spatialDist = Math.sqrt(dx*dx + dy*dy + dz*dz);
               let rangeDist = Math.abs(spatialDist);
-              let w = Math.exp(- (spatialDist**2)/(2*sigmaS**2) - (rangeDist**2)/(2*sigmaR**2));
+              let w = Math.exp( -((spatialDist ** 2) / (2 * sigmaS ** 2)) - ((rangeDist ** 2) / (2 * sigmaR ** 2)) );
               wSum += w; sx += w * curr[v*3]; sy += w * curr[v*3+1]; sz += w * curr[v*3+2];
             });
             next[i*3]   = sx / (wSum || 1);
@@ -718,7 +718,7 @@
             adj[i].forEach(v => {
               let dx = curr[v*3]-curr[i*3], dy = curr[v*3+1]-curr[i*3+1], dz = curr[v*3+2]-curr[i*3+2];
               let d = Math.sqrt(dx*dx + dy*dy + dz*dz);
-              let w = Math.exp(- (d / 0.05)**2);
+              let w = Math.exp(-((d / 0.05) ** 2));
               wSum += w; sx += w * curr[v*3]; sy += w * curr[v*3+1]; sz += w * curr[v*3+2];
             });
             next[i*3]   = sx / (wSum || 1);
@@ -794,7 +794,7 @@
             let diffX = sx/k - curr[i*3];
             let diffY = sy/k - curr[i*3+1];
             let diffZ = sz/k - curr[i*3+2];
-            let mag = Math.sqrt(diffX**2 + diffY**2 + diffZ**2);
+            let mag = Math.sqrt(diffX*diffX + diffY*diffY + diffZ*diffZ);
             if (mag > 0.02) {
               next[i*3]   = curr[i*3]   + 0.7 * diffX;
               next[i*3+1] = curr[i*3+1] + 0.7 * diffY;
